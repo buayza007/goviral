@@ -20,8 +20,17 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "@/components/ui/use-toast";
 
+interface SearchResult {
+  queryId: string;
+  status: string;
+  resultCount: number;
+  pageUrls: string[];
+  contents: unknown[];
+  scoringFormula?: string;
+}
+
 interface PageSearchFormProps {
-  onSearchComplete?: (result: unknown) => void;
+  onSearchComplete?: (result: SearchResult) => void;
 }
 
 const examplePages = [

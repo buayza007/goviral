@@ -208,7 +208,7 @@ export default function SearchPagePage() {
 
         {/* Search Form */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="max-w-2xl mx-auto">
-          <PageSearchForm onSearchComplete={setSearchResult} />
+          <PageSearchForm onSearchComplete={(result) => setSearchResult(result as SearchResult)} />
         </motion.div>
 
         {/* Results */}
