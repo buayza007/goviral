@@ -181,7 +181,7 @@ export async function POST(request: NextRequest) {
               viewsCount,
               engagementScore,
               metricsJson: post as any,
-              reactionsJson: post.reactions || null,
+              reactionsJson: post.reactions ? (post.reactions as any) : undefined,
             },
             create: {
               searchQueryId: searchQuery.id,
@@ -203,7 +203,7 @@ export async function POST(request: NextRequest) {
               viewsCount,
               engagementScore,
               metricsJson: post as any,
-              reactionsJson: post.reactions || null,
+              reactionsJson: post.reactions ? (post.reactions as any) : undefined,
             },
           });
 
