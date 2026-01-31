@@ -39,6 +39,7 @@ export interface SearchParams {
   keyword: string;
   platform: "FACEBOOK" | "INSTAGRAM" | "TIKTOK";
   maxPosts?: number;
+  demoMode?: boolean;
 }
 
 export interface SearchResponse {
@@ -72,6 +73,7 @@ export interface SearchResult {
   status: string;
   resultCount: number;
   contents: Content[];
+  isDemo?: boolean;
 }
 
 export interface SearchQuery {

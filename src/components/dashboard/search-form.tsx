@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { Search, Loader2, Facebook, Instagram, Sparkles } from "lucide-react";
+import { Search, Loader2, Facebook, Instagram, Sparkles, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -22,21 +22,33 @@ interface SearchFormProps {
   onSearchComplete?: (result: SearchResult) => void;
 }
 
+const suggestedKeywords = [
+  "ลดน้ำหนัก",
+  "การตลาดออนไลน์",
+  "สูตรอาหาร",
+  "แฟชั่น2024",
+  "ฟิตเนส",
+  "ท่องเที่ยว",
+  "เงินออม",
+  "สุขภาพ",
+];
+
 export function SearchForm({ onSearchComplete }: SearchFormProps) {
   const [keyword, setKeyword] = useState("");
   const [platform, setPlatform] = useState<"FACEBOOK" | "INSTAGRAM" | "TIKTOK">(
     "FACEBOOK"
   );
-  const [maxPosts, setMaxPosts] = useState(20);
+  const [maxPosts, setMaxPosts] = useState(5);
+  const [demoMode, setDemoMode] = useState(true);
 
   const searchMutation = useMutation({
     mutationFn: async () => {
-      return searchApi.syncSearch({ keyword, platform, maxPosts });
+      return searchApi.syncSearch({ keyword, platform, maxPosts, demoMode });
     },
     onSuccess: (result) => {
       toast({
         title: "🎉 ค้นหาสำเร็จ!",
-        description: `พบ ${result.resultCount} โพสต์ที่น่าสนใจ`,
+        description: `พบ ${result.resultCount} โพสต์ที่น่าสนใจ${result.isDemo ? " (Demo Mode)" : ""}`,
         variant: "default",
       });
       onSearchComplete?.(result);
@@ -55,12 +67,16 @@ export function SearchForm({ onSearchComplete }: SearchFormProps) {
     if (!keyword.trim()) {
       toast({
         title: "กรุณากรอก Keyword",
-        description: "ใส่ชื่อ Page หรือ URL ที่ต้องการค้นหา",
+        description: "ใส่คำค้นหาหรือชื่อ Page ที่ต้องการ",
         variant: "destructive",
       });
       return;
     }
     searchMutation.mutate();
+  };
+
+  const handleSuggestionClick = (suggestion: string) => {
+    setKeyword(suggestion);
   };
 
   return (
@@ -73,23 +89,49 @@ export function SearchForm({ onSearchComplete }: SearchFormProps) {
           <div>
             <h2 className="text-xl font-semibold">ค้นหา Viral Content</h2>
             <p className="text-sm font-normal text-muted-foreground">
-              ใส่ชื่อ Facebook Page หรือ URL เพื่อค้นหาโพสต์ที่มี Engagement สูง
+              พิมพ์คำค้นหาเพื่อดูโพสต์ที่มี Engagement สูงสุด
             </p>
           </div>
         </CardTitle>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Demo Mode Toggle */}
+          <div className="flex items-center justify-between rounded-xl bg-amber-500/10 p-4 border border-amber-500/20">
+            <div className="flex items-center gap-3">
+              <Zap className="h-5 w-5 text-amber-500" />
+              <div>
+                <p className="font-medium text-amber-500">Demo Mode</p>
+                <p className="text-xs text-muted-foreground">
+                  ใช้ข้อมูลตัวอย่างเพื่อทดสอบระบบ
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setDemoMode(!demoMode)}
+              className={`relative w-14 h-7 rounded-full transition-colors ${
+                demoMode ? "bg-amber-500" : "bg-muted"
+              }`}
+            >
+              <span
+                className={`absolute top-1 w-5 h-5 rounded-full bg-white transition-transform ${
+                  demoMode ? "translate-x-8" : "translate-x-1"
+                }`}
+              />
+            </button>
+          </div>
+
           <div className="grid gap-6 md:grid-cols-2">
             {/* Keyword Input */}
             <div className="space-y-2">
               <Label htmlFor="keyword" className="text-sm font-medium">
-                ชื่อ Page หรือ URL
+                คำค้นหา
               </Label>
               <div className="relative">
                 <Input
                   id="keyword"
-                  placeholder="เช่น Marketing Tips หรือ https://facebook.com/..."
+                  placeholder="พิมพ์คำค้นหา เช่น ลดน้ำหนัก, การตลาด..."
                   value={keyword}
                   onChange={(e) => setKeyword(e.target.value)}
                   className="h-12 pl-4 pr-12"
@@ -138,6 +180,27 @@ export function SearchForm({ onSearchComplete }: SearchFormProps) {
             </div>
           </div>
 
+          {/* Suggested Keywords */}
+          <div className="space-y-2">
+            <Label className="text-sm font-medium">คำค้นหาแนะนำ</Label>
+            <div className="flex flex-wrap gap-2">
+              {suggestedKeywords.map((suggestion) => (
+                <button
+                  key={suggestion}
+                  type="button"
+                  onClick={() => handleSuggestionClick(suggestion)}
+                  className={`rounded-full px-3 py-1.5 text-sm transition-colors ${
+                    keyword === suggestion
+                      ? "bg-viral-500 text-white"
+                      : "bg-muted hover:bg-muted/80 text-foreground"
+                  }`}
+                >
+                  {suggestion}
+                </button>
+              ))}
+            </div>
+          </div>
+
           {/* Max Posts Slider */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
@@ -151,7 +214,7 @@ export function SearchForm({ onSearchComplete }: SearchFormProps) {
             <input
               type="range"
               min="5"
-              max="50"
+              max="20"
               step="5"
               value={maxPosts}
               onChange={(e) => setMaxPosts(parseInt(e.target.value))}
@@ -159,7 +222,7 @@ export function SearchForm({ onSearchComplete }: SearchFormProps) {
             />
             <div className="flex justify-between text-xs text-muted-foreground">
               <span>5</span>
-              <span>50</span>
+              <span>20</span>
             </div>
           </div>
 
@@ -180,7 +243,7 @@ export function SearchForm({ onSearchComplete }: SearchFormProps) {
               ) : (
                 <>
                   <Search className="mr-2 h-5 w-5" />
-                  เริ่มค้นหา
+                  🔥 ค้นหาโพสต์ไวรัล
                 </>
               )}
             </Button>
