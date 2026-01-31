@@ -1,8 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
+import { exec } from "child_process";
+import { promisify } from "util";
+
+const execAsync = promisify(exec);
 
 // Force dynamic to prevent static generation timeout
 export const dynamic = "force-dynamic";
+
+// Helper to run migration if needed
+async function ensureTablesExist() {
+  try {
+    await execAsync("npx prisma db push --skip-generate --accept-data-loss", {
+      env: { ...process.env },
+      timeout: 30000,
+    });
+    console.log("[Monitor] Database migration completed");
+    return true;
+  } catch (error) {
+    console.error("[Monitor] Migration failed:", error);
+    return false;
+  }
+}
 
 // ============================================
 // GET - List all monitored pages for user
@@ -21,9 +40,10 @@ export async function GET() {
       return NextResponse.json({ pages: [], totalPosts: 0, newPosts: 0, count: 0 });
     }
 
-    // Try to fetch pages, return empty if table doesn't exist
+    // Try to fetch pages
+    let pages;
     try {
-      const pages = await prisma.monitoredPage.findMany({
+      pages = await prisma.monitoredPage.findMany({
         where: { userId: user.id },
         include: {
           _count: {
@@ -36,44 +56,65 @@ export async function GET() {
         },
         orderBy: { createdAt: "desc" }
       });
-
-      const formattedPages = pages.map(page => ({
-        id: page.id,
-        pageUrl: page.pageUrl,
-        pageName: page.pageName,
-        pageAvatar: page.pageAvatar,
-        isActive: page.isActive,
-        checkInterval: page.checkInterval,
-        lastCheckedAt: page.lastCheckedAt,
-        totalPosts: page._count.posts,
-        newPosts: page.posts.length,
-        createdAt: page.createdAt,
-      }));
-
-      const totalPosts = formattedPages.reduce((sum, p) => sum + p.totalPosts, 0);
-      const newPosts = formattedPages.reduce((sum, p) => sum + p.newPosts, 0);
-
-      return NextResponse.json({ 
-        pages: formattedPages,
-        totalPosts,
-        newPosts,
-        count: pages.length
-      });
     } catch (dbError: unknown) {
-      // Check if table doesn't exist (P2021 = table not found)
       const errorMessage = dbError instanceof Error ? dbError.message : String(dbError);
-      if (errorMessage.includes("P2021") || errorMessage.includes("does not exist") || errorMessage.includes("MonitoredPage")) {
-        console.warn("MonitoredPage table not found, returning empty. Run: npx prisma db push");
-        return NextResponse.json({ 
-          pages: [], 
-          totalPosts: 0, 
-          newPosts: 0, 
-          count: 0,
-          warning: "Database tables not migrated yet. Please run: npx prisma db push"
-        });
+      
+      // If table doesn't exist, try to migrate
+      if (errorMessage.includes("P2021") || errorMessage.includes("does not exist") || errorMessage.includes("relation")) {
+        console.log("[Monitor] Table not found, attempting migration...");
+        const migrated = await ensureTablesExist();
+        
+        if (migrated) {
+          // Retry after migration
+          try {
+            pages = await prisma.monitoredPage.findMany({
+              where: { userId: user.id },
+              include: {
+                _count: { select: { posts: true } },
+                posts: { where: { isNew: true }, select: { id: true } }
+              },
+              orderBy: { createdAt: "desc" }
+            });
+          } catch {
+            // Still failed, return empty
+            return NextResponse.json({ pages: [], totalPosts: 0, newPosts: 0, count: 0 });
+          }
+        } else {
+          return NextResponse.json({ 
+            pages: [], 
+            totalPosts: 0, 
+            newPosts: 0, 
+            count: 0,
+            warning: "Migration failed. Please check database connection."
+          });
+        }
+      } else {
+        throw dbError;
       }
-      throw dbError;
     }
+
+    const formattedPages = (pages || []).map(page => ({
+      id: page.id,
+      pageUrl: page.pageUrl,
+      pageName: page.pageName,
+      pageAvatar: page.pageAvatar,
+      isActive: page.isActive,
+      checkInterval: page.checkInterval,
+      lastCheckedAt: page.lastCheckedAt,
+      totalPosts: page._count.posts,
+      newPosts: page.posts.length,
+      createdAt: page.createdAt,
+    }));
+
+    const totalPosts = formattedPages.reduce((sum, p) => sum + p.totalPosts, 0);
+    const newPosts = formattedPages.reduce((sum, p) => sum + p.newPosts, 0);
+
+    return NextResponse.json({ 
+      pages: formattedPages,
+      totalPosts,
+      newPosts,
+      count: formattedPages.length
+    });
 
   } catch (error) {
     console.error("Error fetching monitored pages:", error);
@@ -116,20 +157,33 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Check if already monitoring this page
-    const existing = await prisma.monitoredPage.findFirst({
-      where: { userId: user.id, pageUrl }
-    });
+    // Try to check if already monitoring, auto-migrate if table missing
+    let existing = null;
+    let pageCount = 0;
+    
+    try {
+      existing = await prisma.monitoredPage.findFirst({
+        where: { userId: user.id, pageUrl }
+      });
+      pageCount = await prisma.monitoredPage.count({
+        where: { userId: user.id }
+      });
+    } catch (dbError: unknown) {
+      const errorMessage = dbError instanceof Error ? dbError.message : String(dbError);
+      if (errorMessage.includes("P2021") || errorMessage.includes("does not exist") || errorMessage.includes("relation")) {
+        console.log("[Monitor POST] Table not found, attempting migration...");
+        await ensureTablesExist();
+        // Tables created, pageCount = 0, existing = null
+      } else {
+        throw dbError;
+      }
+    }
 
     if (existing) {
       return NextResponse.json({ error: "คุณติดตามเพจนี้อยู่แล้ว" }, { status: 400 });
     }
 
     // Check limit (Free plan: 3 pages, Pro: unlimited)
-    const pageCount = await prisma.monitoredPage.count({
-      where: { userId: user.id }
-    });
-
     const limit = user.subscriptionPlan === "FREE" ? 3 : 
                   user.subscriptionPlan === "STARTER" ? 10 : 100;
 
@@ -166,18 +220,10 @@ export async function POST(request: NextRequest) {
     console.error("Error adding monitored page:", error);
     const errorMessage = error instanceof Error ? error.message : String(error);
     
-    // Check if table doesn't exist
-    if (errorMessage.includes("P2021") || errorMessage.includes("does not exist") || errorMessage.includes("MonitoredPage")) {
-      return NextResponse.json({ 
-        error: "ตารางยังไม่ถูกสร้าง กรุณารอสักครู่แล้วลองใหม่",
-        message: "Database migration pending",
-        needsMigration: true
-      }, { status: 503 });
-    }
-    
     return NextResponse.json({ 
-      error: "Failed to add page",
-      message: errorMessage
+      error: "เพิ่มเพจไม่สำเร็จ",
+      message: errorMessage,
+      debug: { stack: error instanceof Error ? error.stack : null }
     }, { status: 500 });
   }
 }
