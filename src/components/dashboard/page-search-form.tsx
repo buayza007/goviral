@@ -45,7 +45,7 @@ export function PageSearchForm({ onSearchComplete }: PageSearchFormProps) {
   const [showHelp, setShowHelp] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [showDebug, setShowDebug] = useState(false);
-  const [debugData, setDebugData] = useState<unknown>(null);
+  const [debugData, setDebugData] = useState<Record<string, unknown> | null>(null);
   const [debugLoading, setDebugLoading] = useState(false);
 
   // Debug function
