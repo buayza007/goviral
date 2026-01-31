@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { Search, Loader2, Facebook, Sparkles, Zap, Info, ExternalLink } from "lucide-react";
+import { Search, Loader2, Facebook, Info, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,38 +18,39 @@ interface SearchFormProps {
 // Example Facebook pages to try
 const examplePages = [
   { name: "Drama-addict", url: "Drama-addict" },
-  { name: "กินอะไรดี", url: "kinginnaidee" },
   { name: "Ookbee", url: "ookbee" },
   { name: "Shopee", url: "ShopeeTH" },
   { name: "Lazada", url: "LazadaThailand" },
+  { name: "7-Eleven", url: "7ElevenThailand" },
 ];
 
 export function SearchForm({ onSearchComplete }: SearchFormProps) {
   const [keyword, setKeyword] = useState("");
-  const [demoMode, setDemoMode] = useState(false); // Default to Live mode now
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const searchMutation = useMutation({
     mutationFn: async () => {
+      setErrorMessage(null);
       return searchApi.syncSearch({ 
         keyword, 
         platform: "FACEBOOK", 
-        maxPosts: 5, 
-        demoMode 
+        maxPosts: 5,
       });
     },
     onSuccess: (result) => {
-      const modeText = result.isDemo ? " (Demo)" : " (Real Data)";
       toast({
-        title: "🔥 ค้นหาสำเร็จ!",
-        description: `พบ ${result.resultCount} โพสต์ไวรัล${modeText}`,
+        title: "🔥 วิเคราะห์สำเร็จ!",
+        description: `พบ ${result.resultCount} โพสต์ไวรัลจาก Facebook Page`,
         variant: "default",
       });
       onSearchComplete?.(result);
     },
-    onError: (error: Error) => {
+    onError: (error: any) => {
+      const message = error?.message || "ไม่สามารถดึงข้อมูลได้";
+      setErrorMessage(message);
       toast({
         title: "เกิดข้อผิดพลาด",
-        description: error.message || "ไม่สามารถค้นหาได้ กรุณาลองใหม่อีกครั้ง",
+        description: message,
         variant: "destructive",
       });
     },
@@ -60,7 +61,7 @@ export function SearchForm({ onSearchComplete }: SearchFormProps) {
     if (!keyword.trim()) {
       toast({
         title: "กรุณากรอกข้อมูล",
-        description: "ใส่ URL หรือชื่อ Facebook Page",
+        description: "ใส่ชื่อ Facebook Page หรือ URL",
         variant: "destructive",
       });
       return;
@@ -72,13 +73,13 @@ export function SearchForm({ onSearchComplete }: SearchFormProps) {
     <Card className="border-viral-500/20 bg-gradient-to-br from-card to-card/50">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-viral-500/20">
-            <Search className="h-5 w-5 text-viral-500" />
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-500/20">
+            <Facebook className="h-5 w-5 text-blue-500" />
           </div>
           <div>
             <h2 className="text-xl font-semibold">Facebook Page Analyzer</h2>
             <p className="text-sm font-normal text-muted-foreground">
-              วิเคราะห์โพสต์ไวรัลจาก Facebook Page
+              ดึงข้อมูลจริงจาก Facebook ผ่าน Apify API
             </p>
           </div>
         </CardTitle>
@@ -96,41 +97,8 @@ export function SearchForm({ onSearchComplete }: SearchFormProps) {
                     (Likes × 1) + (Comments × 3) + (Shares × 5)
                   </code>
                 </p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Shares มีค่ามากที่สุด → Comments → Likes
-                </p>
               </div>
             </div>
-          </div>
-
-          {/* Mode Toggle */}
-          <div className="flex items-center justify-between rounded-xl bg-muted/50 p-4 border border-border">
-            <div className="flex items-center gap-3">
-              <Zap className={`h-5 w-5 ${demoMode ? "text-amber-500" : "text-green-500"}`} />
-              <div>
-                <p className={`font-medium ${demoMode ? "text-amber-600" : "text-green-600"}`}>
-                  {demoMode ? "Demo Mode" : "🔴 Live Mode (Apify)"}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {demoMode 
-                    ? "ใช้ข้อมูลตัวอย่าง" 
-                    : "ดึงข้อมูลจริงจาก Facebook"}
-                </p>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => setDemoMode(!demoMode)}
-              className={`relative w-14 h-7 rounded-full transition-colors ${
-                demoMode ? "bg-amber-500" : "bg-green-500"
-              }`}
-            >
-              <span
-                className={`absolute top-1 w-5 h-5 rounded-full bg-white transition-transform shadow-sm ${
-                  demoMode ? "translate-x-1" : "translate-x-8"
-                }`}
-              />
-            </button>
           </div>
 
           {/* Input Field */}
@@ -150,9 +118,6 @@ export function SearchForm({ onSearchComplete }: SearchFormProps) {
                 <Facebook className="h-5 w-5 text-blue-500" />
               </div>
             </div>
-            <p className="text-xs text-muted-foreground">
-              💡 ใส่ชื่อ Page หรือ URL เต็ม เช่น <code className="bg-muted px-1 rounded">Drama-addict</code>
-            </p>
           </div>
 
           {/* Example Pages */}
@@ -177,6 +142,22 @@ export function SearchForm({ onSearchComplete }: SearchFormProps) {
             </div>
           </div>
 
+          {/* Error Message */}
+          {errorMessage && (
+            <div className="rounded-xl bg-red-500/10 p-4 border border-red-500/20">
+              <div className="flex items-start gap-3">
+                <AlertCircle className="h-5 w-5 text-red-500 mt-0.5" />
+                <div>
+                  <p className="font-medium text-red-500">เกิดข้อผิดพลาด</p>
+                  <p className="text-sm text-red-400 mt-1">{errorMessage}</p>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    💡 ตรวจสอบว่า Facebook Page เปิดสาธารณะและชื่อถูกต้อง
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Submit Button */}
           <motion.div whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }}>
             <Button
@@ -189,7 +170,7 @@ export function SearchForm({ onSearchComplete }: SearchFormProps) {
               {searchMutation.isPending ? (
                 <>
                   <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                  กำลังวิเคราะห์ Facebook Page...
+                  กำลังดึงข้อมูลจาก Facebook...
                 </>
               ) : (
                 <>
@@ -200,25 +181,25 @@ export function SearchForm({ onSearchComplete }: SearchFormProps) {
             </Button>
           </motion.div>
 
-          {/* Loading Tips */}
-          {searchMutation.isPending && !demoMode && (
+          {/* Loading Info */}
+          {searchMutation.isPending && (
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               className="rounded-xl bg-blue-500/10 p-4 text-center border border-blue-500/20"
             >
               <p className="text-sm text-blue-400">
-                ⏳ กำลังดึงข้อมูลจาก Facebook ผ่าน Apify... อาจใช้เวลา 30-90 วินาที
+                ⏳ กำลังดึงข้อมูลจาก Facebook ผ่าน Apify API...
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                อาจใช้เวลา 30-90 วินาที
               </p>
             </motion.div>
           )}
 
           {/* How it works */}
           <div className="rounded-xl bg-muted/30 p-4 border border-border/50">
-            <p className="text-sm font-medium mb-2 flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-viral-500" />
-              วิธีการทำงาน
-            </p>
+            <p className="text-sm font-medium mb-2">📋 ขั้นตอนการทำงาน</p>
             <ol className="text-xs text-muted-foreground space-y-1 list-decimal list-inside">
               <li>ระบบดึงโพสต์ล่าสุด 50 รายการจาก Facebook Page</li>
               <li>คำนวณ Viral Score จาก Likes, Comments, Shares</li>

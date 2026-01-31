@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Sparkles, TrendingUp, Lightbulb, Trophy, Flame, Facebook } from "lucide-react";
+import { Sparkles, Lightbulb, Trophy, Flame, Facebook } from "lucide-react";
 import { SearchForm } from "@/components/dashboard/search-form";
 import { ContentCard } from "@/components/dashboard/content-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,17 +13,17 @@ const searchTips = [
   {
     icon: "📱",
     title: "ใส่ชื่อ Facebook Page",
-    description: "เช่น Drama-addict, Shopee, หรือชื่อ Page ที่ต้องการวิเคราะห์",
+    description: "เช่น Drama-addict, ShopeeTH, LazadaThailand",
   },
   {
     icon: "🔗",
     title: "หรือใส่ URL เต็ม",
-    description: "เช่น https://facebook.com/PageName",
+    description: "เช่น https://facebook.com/Drama-addict",
   },
   {
     icon: "📊",
     title: "ดู Top 5 โพสต์ไวรัล",
-    description: "เรียงตาม Viral Score: Likes×1 + Comments×3 + Shares×5",
+    description: "เรียงตาม Viral Score สูงสุด",
   },
 ];
 
@@ -59,7 +59,7 @@ export default function SearchPage() {
           <div>
             <h1 className="text-2xl font-bold">Facebook Page Analyzer</h1>
             <p className="text-muted-foreground">
-              วิเคราะห์โพสต์ไวรัลจาก Facebook Page ด้วย Viral Score Algorithm
+              วิเคราะห์โพสต์ไวรัลจาก Facebook Page ด้วยข้อมูลจริงจาก Apify
             </p>
           </div>
         </div>
@@ -120,16 +120,9 @@ export default function SearchPage() {
                 </h2>
                 <p className="text-sm text-muted-foreground">
                   เรียงตาม Viral Score สูงสุด
-                  {searchResult.isDemo && (
-                    <span className="ml-2 px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-500 text-xs">
-                      Demo Mode
-                    </span>
-                  )}
-                  {!searchResult.isDemo && (
-                    <span className="ml-2 px-2 py-0.5 rounded-full bg-green-500/20 text-green-500 text-xs">
-                      Real Data
-                    </span>
-                  )}
+                  <span className="ml-2 px-2 py-0.5 rounded-full bg-green-500/20 text-green-500 text-xs">
+                    Real Data from Apify
+                  </span>
                 </p>
               </div>
             </div>
@@ -163,13 +156,6 @@ export default function SearchPage() {
               <Sparkles className="h-4 w-4 text-viral-500" />
               <span className="text-muted-foreground">Formula:</span>
               <code className="font-mono text-viral-500">{searchResult.scoringFormula}</code>
-            </div>
-          )}
-
-          {/* Hint for demo mode */}
-          {searchResult.isDemo && (searchResult as any).hint && (
-            <div className="rounded-xl bg-amber-500/10 p-4 border border-amber-500/20">
-              <p className="text-sm text-amber-600">{(searchResult as any).hint}</p>
             </div>
           )}
 
