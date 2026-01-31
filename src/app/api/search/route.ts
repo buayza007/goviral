@@ -11,6 +11,7 @@ interface ViralPost {
   facebookUrl: string;
   caption: string;
   imageUrl?: string;
+  pageName?: string;
   metrics: {
     likes: number;
     comments: number;
@@ -27,6 +28,7 @@ interface ApifyFacebookPost {
   message?: string;
   caption?: string;
   content?: string;
+  postText?: string;
   imageUrl?: string;
   image?: string;
   media?: { image?: string }[];
@@ -43,6 +45,9 @@ interface ApifyFacebookPost {
   date?: string;
   pageName?: string;
   authorName?: string;
+  name?: string;
+  // Facebook Pages Scraper specific fields
+  posts?: ApifyFacebookPost[];
   [key: string]: unknown;
 }
 
@@ -51,24 +56,43 @@ interface ApifyFacebookPost {
 // ============================================
 
 function calculateViralScore(likes: number, comments: number, shares: number): number {
-  // Formula: (likes * 1) + (comments * 3) + (shares * 5)
-  // Shares weighted highest (true virality), then comments (engagement), then likes
   return (likes * 1) + (comments * 3) + (shares * 5);
 }
 
-function processApifyResults(items: ApifyFacebookPost[]): ViralPost[] {
-  // Step 1: Filter - Remove items with no content or missing URL
-  const filtered = items.filter(item => {
-    const url = item.url || item.postUrl || item.link;
-    const text = item.text || item.message || item.caption || item.content;
-    return url && (text || item.imageUrl || item.image);
+function extractPostsFromPageData(pageData: ApifyFacebookPost[]): ApifyFacebookPost[] {
+  const allPosts: ApifyFacebookPost[] = [];
+  
+  for (const item of pageData) {
+    // If item has posts array (from page scraper)
+    if (item.posts && Array.isArray(item.posts)) {
+      allPosts.push(...item.posts);
+    }
+    // If item itself is a post
+    else if (item.url || item.postUrl || item.text || item.message) {
+      allPosts.push(item);
+    }
+  }
+  
+  return allPosts;
+}
+
+function processApifyResults(items: ApifyFacebookPost[], pageName?: string): ViralPost[] {
+  // Extract posts from page data
+  const posts = extractPostsFromPageData(items);
+  
+  // Filter - Remove items with no engagement data
+  const filtered = posts.filter(item => {
+    const hasEngagement = (item.likes || item.likesCount || item.reactions || 0) > 0 ||
+                         (item.comments || item.commentsCount || 0) > 0 ||
+                         (item.shares || item.sharesCount || 0) > 0;
+    return hasEngagement;
   });
 
-  // Step 2: Map - Transform raw data to clean object
+  // Map - Transform raw data to clean object
   const mapped: ViralPost[] = filtered.map(item => {
-    const likes = item.likes || item.likesCount || item.reactions || item.reactionsCount || 0;
-    const comments = item.comments || item.commentsCount || 0;
-    const shares = item.shares || item.sharesCount || 0;
+    const likes = Number(item.likes || item.likesCount || item.reactions || item.reactionsCount || 0);
+    const comments = Number(item.comments || item.commentsCount || 0);
+    const shares = Number(item.shares || item.sharesCount || 0);
     
     // Get image URL
     let imageUrl = item.imageUrl || item.image;
@@ -76,24 +100,23 @@ function processApifyResults(items: ApifyFacebookPost[]): ViralPost[] {
       imageUrl = item.media[0].image;
     }
 
+    const postUrl = item.url || item.postUrl || item.link || "";
+    const caption = item.text || item.message || item.caption || item.content || item.postText || "";
+
     return {
-      facebookUrl: item.url || item.postUrl || item.link || "",
-      caption: item.text || item.message || item.caption || item.content || "",
+      facebookUrl: postUrl,
+      caption,
       imageUrl,
-      metrics: {
-        likes,
-        comments,
-        shares,
-      },
-      // Step 3: Calculate Score
+      pageName: item.pageName || item.authorName || item.name || pageName,
+      metrics: { likes, comments, shares },
       score: calculateViralScore(likes, comments, shares),
     };
   });
 
-  // Step 4: Sort by engagementScore descending (highest first)
+  // Sort by score descending
   mapped.sort((a, b) => b.score - a.score);
 
-  // Step 5: Return only Top 5
+  // Return Top 5
   return mapped.slice(0, 5);
 }
 
@@ -107,6 +130,7 @@ function generateMockData(keyword: string): ViralPost[] {
       facebookUrl: "https://facebook.com/post/viral1",
       caption: `🔥 ${keyword} - เคล็ดลับที่คุณต้องรู้! วิธีที่ได้ผลจริงๆ ลองแล้วเห็นผลภายใน 2 สัปดาห์ แชร์ให้เพื่อนๆ ด้วยนะครับ! #${keyword.replace(/\s/g, "")} #viral #trending`,
       imageUrl: "https://picsum.photos/seed/viral1/800/600",
+      pageName: "Health & Wellness TH",
       metrics: { likes: 45000, comments: 8500, shares: 12000 },
       score: calculateViralScore(45000, 8500, 12000),
     },
@@ -114,6 +138,7 @@ function generateMockData(keyword: string): ViralPost[] {
       facebookUrl: "https://facebook.com/post/viral2",
       caption: `💪 ${keyword} แบบธรรมชาติ! ไม่ต้องพึ่งยา ไม่ต้องอดอาหาร แค่ทำตามนี้ทุกวัน รับรองเห็นผล! ใครลองแล้วมาบอกกันในคอมเมนต์ด้วยนะ`,
       imageUrl: "https://picsum.photos/seed/viral2/800/600",
+      pageName: "Fitness Expert",
       metrics: { likes: 38000, comments: 6200, shares: 9500 },
       score: calculateViralScore(38000, 6200, 9500),
     },
@@ -121,6 +146,7 @@ function generateMockData(keyword: string): ViralPost[] {
       facebookUrl: "https://facebook.com/post/viral3",
       caption: `✨ รีวิวจริงจากคนใช้จริง! ${keyword} ได้ผลจริงไหม? มาดูประสบการณ์ตรงกันเลย! กดแชร์ไว้ไปอ่านทีหลังได้นะคะ 💕`,
       imageUrl: "https://picsum.photos/seed/viral3/800/600",
+      pageName: "Review Thailand",
       metrics: { likes: 32000, comments: 5800, shares: 7200 },
       score: calculateViralScore(32000, 5800, 7200),
     },
@@ -128,6 +154,7 @@ function generateMockData(keyword: string): ViralPost[] {
       facebookUrl: "https://facebook.com/post/viral4",
       caption: `📢 ข่าวดี! วิธี${keyword}ที่หมอแนะนำ ปลอดภัย ได้ผลจริง ไม่โยโย่ คนดูแล้วกว่า 2 ล้านคน! อ่านรายละเอียดเต็มๆ ในคอมเม้นท์แรกเลย 👇`,
       imageUrl: "https://picsum.photos/seed/viral4/800/600",
+      pageName: "Doctor Health Tips",
       metrics: { likes: 28000, comments: 4500, shares: 5800 },
       score: calculateViralScore(28000, 4500, 5800),
     },
@@ -135,6 +162,7 @@ function generateMockData(keyword: string): ViralPost[] {
       facebookUrl: "https://facebook.com/post/viral5",
       caption: `🎯 ${keyword} สำหรับมือใหม่ เริ่มต้นยังไงดี? มาดูคำแนะนำจากผู้เชี่ยวชาญกันเลย! กดติดตามเพจเพื่อไม่พลาดเคล็ดลับดีๆ แบบนี้`,
       imageUrl: "https://picsum.photos/seed/viral5/800/600",
+      pageName: "Lifestyle Guide",
       metrics: { likes: 22000, comments: 3800, shares: 4500 },
       score: calculateViralScore(22000, 3800, 4500),
     },
@@ -144,28 +172,32 @@ function generateMockData(keyword: string): ViralPost[] {
 }
 
 // ============================================
-// APIFY FACEBOOK SEARCH FUNCTION
+// APIFY FACEBOOK PAGE SCRAPER
 // ============================================
 
-async function searchFacebookViralContent(
-  keyword: string,
+async function scrapeFacebookPage(
+  pageUrl: string,
   apifyToken: string
 ): Promise<ViralPost[]> {
   const client = new ApifyClient({ token: apifyToken });
+  const actorId = process.env.APIFY_ACTOR_ID || "apify/facebook-pages-scraper";
 
-  // Use Facebook Search Scraper actor
-  const actorId = process.env.APIFY_ACTOR_ID || "apify/facebook-posts-scraper";
-  
-  // Build the search URL
-  const searchUrl = `https://www.facebook.com/search/posts/?q=${encodeURIComponent(keyword)}`;
+  // Extract page name from URL for display
+  const pageNameMatch = pageUrl.match(/facebook\.com\/([^/?]+)/);
+  const pageName = pageNameMatch ? pageNameMatch[1] : "Facebook Page";
 
   const input = {
-    startUrls: [{ url: searchUrl }],
-    resultsLimit: 30,
-    maxPosts: 30,
+    startUrls: [{ url: pageUrl }],
+    maxPosts: 50,
+    maxPostComments: 0,
+    maxReviewComments: 0,
+    scrapeAbout: false,
+    scrapePosts: true,
+    scrapeServices: false,
+    scrapeReviews: false,
   };
 
-  console.log(`Starting Apify search for keyword: "${keyword}"`);
+  console.log(`Scraping Facebook page: ${pageUrl}`);
   console.log(`Using actor: ${actorId}`);
 
   try {
@@ -173,37 +205,49 @@ async function searchFacebookViralContent(
       waitSecs: 120,
     });
 
-    console.log(`Apify run completed with status: ${run.status}`);
+    console.log(`Apify run status: ${run.status}`);
 
     const { items } = await client.dataset(run.defaultDatasetId).listItems();
-
     console.log(`Retrieved ${items.length} items from Apify`);
 
     if (items.length === 0) {
       return [];
     }
 
-    return processApifyResults(items as ApifyFacebookPost[]);
+    return processApifyResults(items as ApifyFacebookPost[], pageName);
   } catch (error) {
-    console.error("Apify search error:", error);
+    console.error("Apify scrape error:", error);
     throw error;
   }
 }
 
 // ============================================
-// HELPER: Convert string to Platform enum
+// HELPER FUNCTIONS
 // ============================================
+
+function isValidFacebookUrl(input: string): boolean {
+  return input.includes("facebook.com/") || input.includes("fb.com/");
+}
+
+function formatFacebookUrl(input: string): string {
+  // If already a full URL
+  if (input.startsWith("http")) {
+    return input;
+  }
+  // If just a page name/username
+  return `https://www.facebook.com/${input.trim()}`;
+}
 
 function toPlatformEnum(platform: string): Platform {
   const upperPlatform = platform.toUpperCase();
   if (upperPlatform === "FACEBOOK") return Platform.FACEBOOK;
   if (upperPlatform === "INSTAGRAM") return Platform.INSTAGRAM;
   if (upperPlatform === "TIKTOK") return Platform.TIKTOK;
-  return Platform.FACEBOOK; // Default
+  return Platform.FACEBOOK;
 }
 
 // ============================================
-// DATABASE OPERATIONS (Optional - with error handling)
+// DATABASE OPERATIONS
 // ============================================
 
 async function tryDatabaseOperations(
@@ -214,13 +258,9 @@ async function tryDatabaseOperations(
   isDemo: boolean
 ) {
   try {
-    // Dynamic import to handle cases where database is not available
     const { default: prisma } = await import("@/lib/prisma");
-    
-    // Convert string to Platform enum
     const platform = toPlatformEnum(platformStr);
 
-    // Get or create user
     let user = await prisma.user.findUnique({ where: { clerkId } });
     if (!user) {
       user = await prisma.user.create({
@@ -228,29 +268,28 @@ async function tryDatabaseOperations(
       });
     }
 
-    // Create search query
     const searchQuery = await prisma.searchQuery.create({
       data: {
         userId: user.id,
         keyword,
-        platform: platform,
+        platform,
         status: "COMPLETED",
         apifyRunId: isDemo ? "demo_mode" : `apify_${Date.now()}`,
         resultCount: viralPosts.length,
       },
     });
 
-    // Save contents
     for (let i = 0; i < viralPosts.length; i++) {
       const post = viralPosts[i];
       await prisma.content.create({
         data: {
           searchQueryId: searchQuery.id,
           externalId: `${searchQuery.id}_${i}_${Date.now()}`,
-          platform: platform,
+          platform,
           url: post.facebookUrl,
           caption: post.caption,
           imageUrl: post.imageUrl || null,
+          pageName: post.pageName || null,
           likesCount: post.metrics.likes,
           commentsCount: post.metrics.comments,
           sharesCount: post.metrics.shares,
@@ -260,7 +299,6 @@ async function tryDatabaseOperations(
       });
     }
 
-    // Update search count
     await prisma.user.update({
       where: { id: user.id },
       data: { searchesUsed: { increment: 1 } },
@@ -268,7 +306,7 @@ async function tryDatabaseOperations(
 
     return { success: true, queryId: searchQuery.id };
   } catch (dbError) {
-    console.error("Database operation failed (non-critical):", dbError);
+    console.error("Database error (non-critical):", dbError);
     return { success: false, queryId: `temp_${Date.now()}` };
   }
 }
@@ -279,14 +317,12 @@ async function tryDatabaseOperations(
 
 export async function POST(request: NextRequest) {
   try {
-    // Check authentication
     const { userId: clerkId } = await auth();
 
     if (!clerkId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Parse request body
     const body = await request.json();
     const { keyword, platform = "FACEBOOK", demoMode = true } = body;
 
@@ -301,34 +337,48 @@ export async function POST(request: NextRequest) {
 
     let viralPosts: ViralPost[] = [];
     let isDemo = demoMode;
+    let searchType = "demo";
 
-    // Determine if we should use real API or demo mode
     const apifyToken = process.env.APIFY_API_TOKEN;
     const useRealApi = !demoMode && apifyToken;
 
     if (useRealApi) {
-      try {
-        console.log("Using real Apify API...");
-        viralPosts = await searchFacebookViralContent(keyword, apifyToken);
-        isDemo = false;
+      // Check if input is a Facebook URL or page name
+      const isFacebookInput = isValidFacebookUrl(keyword) || !keyword.includes(" ");
+      
+      if (isFacebookInput) {
+        try {
+          const pageUrl = formatFacebookUrl(keyword);
+          console.log(`Scraping Facebook page: ${pageUrl}`);
+          
+          viralPosts = await scrapeFacebookPage(pageUrl, apifyToken);
+          searchType = "facebook_page";
+          isDemo = false;
 
-        // If no results, fallback to demo
-        if (viralPosts.length === 0) {
-          console.log("No results from Apify, falling back to demo mode");
+          if (viralPosts.length === 0) {
+            console.log("No posts found, using demo data");
+            viralPosts = generateMockData(keyword);
+            isDemo = true;
+            searchType = "demo_fallback";
+          }
+        } catch (apifyError) {
+          console.error("Apify error:", apifyError);
           viralPosts = generateMockData(keyword);
           isDemo = true;
+          searchType = "demo_error";
         }
-      } catch (apifyError) {
-        console.error("Apify error, falling back to demo mode:", apifyError);
+      } else {
+        // Keyword search not supported - use demo
+        console.log("Keyword search not supported, using demo data");
         viralPosts = generateMockData(keyword);
         isDemo = true;
+        searchType = "demo_keyword_not_supported";
       }
     } else {
-      console.log("Using demo mode...");
       viralPosts = generateMockData(keyword);
     }
 
-    // Try to save to database (non-blocking)
+    // Save to database
     const dbResult = await tryDatabaseOperations(
       clerkId,
       keyword,
@@ -337,14 +387,14 @@ export async function POST(request: NextRequest) {
       isDemo
     );
 
-    // Transform to response format
+    // Transform response
     const contents = viralPosts.map((post, index) => ({
       id: `${dbResult.queryId}_${index}`,
       externalId: `post_${index}_${Date.now()}`,
       url: post.facebookUrl,
       caption: post.caption,
       imageUrl: post.imageUrl,
-      pageName: null,
+      pageName: post.pageName,
       pageUrl: null,
       postType: "post",
       postedAt: null,
@@ -367,7 +417,11 @@ export async function POST(request: NextRequest) {
       resultCount: contents.length,
       contents,
       isDemo,
+      searchType,
       scoringFormula: "(likes × 1) + (comments × 3) + (shares × 5)",
+      hint: isDemo 
+        ? "💡 ใส่ URL หรือชื่อ Facebook Page เพื่อดึงข้อมูลจริง เช่น 'https://facebook.com/PageName' หรือ 'PageName'"
+        : undefined,
     });
   } catch (error) {
     console.error("Search error:", error);

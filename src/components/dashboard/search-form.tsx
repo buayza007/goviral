@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { Search, Loader2, Facebook, Sparkles, Zap, Info } from "lucide-react";
+import { Search, Loader2, Facebook, Sparkles, Zap, Info, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,20 +15,18 @@ interface SearchFormProps {
   onSearchComplete?: (result: SearchResult) => void;
 }
 
-const suggestedKeywords = [
-  "ลดน้ำหนัก",
-  "การตลาดออนไลน์",
-  "สูตรอาหาร",
-  "แฟชั่น",
-  "ฟิตเนส",
-  "ท่องเที่ยว",
-  "หุ้น",
-  "คริปโต",
+// Example Facebook pages to try
+const examplePages = [
+  { name: "Drama-addict", url: "Drama-addict" },
+  { name: "กินอะไรดี", url: "kinginnaidee" },
+  { name: "Ookbee", url: "ookbee" },
+  { name: "Shopee", url: "ShopeeTH" },
+  { name: "Lazada", url: "LazadaThailand" },
 ];
 
 export function SearchForm({ onSearchComplete }: SearchFormProps) {
   const [keyword, setKeyword] = useState("");
-  const [demoMode, setDemoMode] = useState(false);
+  const [demoMode, setDemoMode] = useState(false); // Default to Live mode now
 
   const searchMutation = useMutation({
     mutationFn: async () => {
@@ -61,8 +59,8 @@ export function SearchForm({ onSearchComplete }: SearchFormProps) {
     e.preventDefault();
     if (!keyword.trim()) {
       toast({
-        title: "กรุณากรอก Keyword",
-        description: "พิมพ์คำค้นหาที่ต้องการ",
+        title: "กรุณากรอกข้อมูล",
+        description: "ใส่ URL หรือชื่อ Facebook Page",
         variant: "destructive",
       });
       return;
@@ -78,9 +76,9 @@ export function SearchForm({ onSearchComplete }: SearchFormProps) {
             <Search className="h-5 w-5 text-viral-500" />
           </div>
           <div>
-            <h2 className="text-xl font-semibold">Facebook Viral Search</h2>
+            <h2 className="text-xl font-semibold">Facebook Page Analyzer</h2>
             <p className="text-sm font-normal text-muted-foreground">
-              ค้นหาโพสต์ที่มี Engagement สูงสุดจาก Facebook
+              วิเคราะห์โพสต์ไวรัลจาก Facebook Page
             </p>
           </div>
         </CardTitle>
@@ -99,24 +97,24 @@ export function SearchForm({ onSearchComplete }: SearchFormProps) {
                   </code>
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Shares มีค่ามากที่สุด → Comments → Likes (เพราะ Share = Virality แท้จริง)
+                  Shares มีค่ามากที่สุด → Comments → Likes
                 </p>
               </div>
             </div>
           </div>
 
-          {/* Demo Mode Toggle */}
-          <div className="flex items-center justify-between rounded-xl bg-amber-500/10 p-4 border border-amber-500/20">
+          {/* Mode Toggle */}
+          <div className="flex items-center justify-between rounded-xl bg-muted/50 p-4 border border-border">
             <div className="flex items-center gap-3">
-              <Zap className="h-5 w-5 text-amber-500" />
+              <Zap className={`h-5 w-5 ${demoMode ? "text-amber-500" : "text-green-500"}`} />
               <div>
-                <p className="font-medium text-amber-600">
-                  {demoMode ? "Demo Mode (ข้อมูลตัวอย่าง)" : "Live Mode (Apify API)"}
+                <p className={`font-medium ${demoMode ? "text-amber-600" : "text-green-600"}`}>
+                  {demoMode ? "Demo Mode" : "🔴 Live Mode (Apify)"}
                 </p>
                 <p className="text-xs text-muted-foreground">
                   {demoMode 
-                    ? "ใช้ข้อมูล Mock เพื่อทดสอบ" 
-                    : "ดึงข้อมูลจริงจาก Facebook ผ่าน Apify"}
+                    ? "ใช้ข้อมูลตัวอย่าง" 
+                    : "ดึงข้อมูลจริงจาก Facebook"}
                 </p>
               </div>
             </div>
@@ -129,56 +127,54 @@ export function SearchForm({ onSearchComplete }: SearchFormProps) {
             >
               <span
                 className={`absolute top-1 w-5 h-5 rounded-full bg-white transition-transform shadow-sm ${
-                  demoMode ? "translate-x-8" : "translate-x-1"
+                  demoMode ? "translate-x-1" : "translate-x-8"
                 }`}
               />
             </button>
           </div>
 
-          {/* Keyword Input */}
+          {/* Input Field */}
           <div className="space-y-2">
             <Label htmlFor="keyword" className="text-sm font-medium">
-              คำค้นหา (Keyword)
+              Facebook Page URL หรือชื่อ Page
             </Label>
             <div className="relative">
               <Input
                 id="keyword"
-                placeholder="พิมพ์คำค้นหา เช่น ลดน้ำหนัก, การตลาด, สูตรอาหาร..."
+                placeholder="เช่น Drama-addict หรือ https://facebook.com/Drama-addict"
                 value={keyword}
                 onChange={(e) => setKeyword(e.target.value)}
                 className="h-14 pl-4 pr-12 text-lg"
               />
               <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                <Sparkles className="h-5 w-5 text-muted-foreground" />
+                <Facebook className="h-5 w-5 text-blue-500" />
               </div>
             </div>
+            <p className="text-xs text-muted-foreground">
+              💡 ใส่ชื่อ Page หรือ URL เต็ม เช่น <code className="bg-muted px-1 rounded">Drama-addict</code>
+            </p>
           </div>
 
-          {/* Suggested Keywords */}
+          {/* Example Pages */}
           <div className="space-y-2">
-            <Label className="text-sm font-medium">คำค้นหาแนะนำ</Label>
+            <Label className="text-sm font-medium">ตัวอย่าง Facebook Pages</Label>
             <div className="flex flex-wrap gap-2">
-              {suggestedKeywords.map((suggestion) => (
+              {examplePages.map((page) => (
                 <button
-                  key={suggestion}
+                  key={page.url}
                   type="button"
-                  onClick={() => setKeyword(suggestion)}
-                  className={`rounded-full px-4 py-2 text-sm font-medium transition-all ${
-                    keyword === suggestion
-                      ? "bg-viral-500 text-white shadow-lg shadow-viral-500/30"
+                  onClick={() => setKeyword(page.url)}
+                  className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-all ${
+                    keyword === page.url
+                      ? "bg-blue-500 text-white shadow-lg shadow-blue-500/30"
                       : "bg-muted hover:bg-muted/80 hover:scale-105"
                   }`}
                 >
-                  {suggestion}
+                  <Facebook className="h-3.5 w-3.5" />
+                  {page.name}
                 </button>
               ))}
             </div>
-          </div>
-
-          {/* Platform Badge */}
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Facebook className="h-4 w-4 text-blue-500" />
-            <span>ค้นหาจาก Facebook Search Posts</span>
           </div>
 
           {/* Submit Button */}
@@ -193,31 +189,42 @@ export function SearchForm({ onSearchComplete }: SearchFormProps) {
               {searchMutation.isPending ? (
                 <>
                   <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                  กำลังค้นหา Viral Content...
+                  กำลังวิเคราะห์ Facebook Page...
                 </>
               ) : (
                 <>
                   <Search className="mr-2 h-5 w-5" />
-                  🔥 ค้นหา Top 5 โพสต์ไวรัล
+                  🔥 วิเคราะห์ Top 5 โพสต์ไวรัล
                 </>
               )}
             </Button>
           </motion.div>
 
           {/* Loading Tips */}
-          {searchMutation.isPending && (
+          {searchMutation.isPending && !demoMode && (
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="rounded-xl bg-viral-500/10 p-4 text-center"
+              className="rounded-xl bg-blue-500/10 p-4 text-center border border-blue-500/20"
             >
-              <p className="text-sm text-viral-400">
-                💡 {demoMode 
-                  ? "กำลังสร้างข้อมูลตัวอย่าง..." 
-                  : "กำลังดึงข้อมูลจาก Facebook... อาจใช้เวลา 30-60 วินาที"}
+              <p className="text-sm text-blue-400">
+                ⏳ กำลังดึงข้อมูลจาก Facebook ผ่าน Apify... อาจใช้เวลา 30-90 วินาที
               </p>
             </motion.div>
           )}
+
+          {/* How it works */}
+          <div className="rounded-xl bg-muted/30 p-4 border border-border/50">
+            <p className="text-sm font-medium mb-2 flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-viral-500" />
+              วิธีการทำงาน
+            </p>
+            <ol className="text-xs text-muted-foreground space-y-1 list-decimal list-inside">
+              <li>ระบบดึงโพสต์ล่าสุด 50 รายการจาก Facebook Page</li>
+              <li>คำนวณ Viral Score จาก Likes, Comments, Shares</li>
+              <li>จัดอันดับและแสดง Top 5 โพสต์ที่มี Engagement สูงสุด</li>
+            </ol>
+          </div>
         </form>
       </CardContent>
     </Card>

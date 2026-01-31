@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Sparkles, TrendingUp, Lightbulb, Trophy, Flame } from "lucide-react";
+import { Sparkles, TrendingUp, Lightbulb, Trophy, Flame, Facebook } from "lucide-react";
 import { SearchForm } from "@/components/dashboard/search-form";
 import { ContentCard } from "@/components/dashboard/content-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,19 +11,19 @@ import { formatNumber } from "@/lib/utils";
 
 const searchTips = [
   {
-    icon: "🔥",
-    title: "คำค้นหาเฉพาะเจาะจง",
-    description: "ใช้คำที่ชัดเจน เช่น 'ลดน้ำหนัก 7 วัน' แทน 'ลดน้ำหนัก'",
+    icon: "📱",
+    title: "ใส่ชื่อ Facebook Page",
+    description: "เช่น Drama-addict, Shopee, หรือชื่อ Page ที่ต้องการวิเคราะห์",
+  },
+  {
+    icon: "🔗",
+    title: "หรือใส่ URL เต็ม",
+    description: "เช่น https://facebook.com/PageName",
   },
   {
     icon: "📊",
-    title: "Viral Score Formula",
-    description: "Likes×1 + Comments×3 + Shares×5 = คะแนนไวรัล",
-  },
-  {
-    icon: "🚀",
-    title: "Shares มีค่ามากที่สุด",
-    description: "เพราะ Share แสดงถึงการแพร่กระจายที่แท้จริง",
+    title: "ดู Top 5 โพสต์ไวรัล",
+    description: "เรียงตาม Viral Score: Likes×1 + Comments×3 + Shares×5",
   },
 ];
 
@@ -53,13 +53,13 @@ export default function SearchPage() {
         animate={{ opacity: 1, y: 0 }}
       >
         <div className="flex items-center gap-3">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-viral-500/20">
-            <TrendingUp className="h-6 w-6 text-viral-500" />
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-500/20">
+            <Facebook className="h-6 w-6 text-blue-500" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold">ค้นหา Viral Content</h1>
+            <h1 className="text-2xl font-bold">Facebook Page Analyzer</h1>
             <p className="text-muted-foreground">
-              ค้นหาโพสต์ไวรัลจาก Facebook ด้วย Viral Scoring Algorithm
+              วิเคราะห์โพสต์ไวรัลจาก Facebook Page ด้วย Viral Score Algorithm
             </p>
           </div>
         </div>
@@ -121,7 +121,14 @@ export default function SearchPage() {
                 <p className="text-sm text-muted-foreground">
                   เรียงตาม Viral Score สูงสุด
                   {searchResult.isDemo && (
-                    <span className="ml-2 text-amber-500">(Demo Mode)</span>
+                    <span className="ml-2 px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-500 text-xs">
+                      Demo Mode
+                    </span>
+                  )}
+                  {!searchResult.isDemo && (
+                    <span className="ml-2 px-2 py-0.5 rounded-full bg-green-500/20 text-green-500 text-xs">
+                      Real Data
+                    </span>
                   )}
                 </p>
               </div>
@@ -129,7 +136,7 @@ export default function SearchPage() {
 
             {/* Total Stats */}
             {totalStats && (
-              <div className="flex gap-4 text-sm">
+              <div className="flex gap-3 text-sm flex-wrap">
                 <div className="flex items-center gap-1.5 rounded-full bg-pink-500/10 px-3 py-1.5">
                   <span className="text-pink-500">❤️</span>
                   <span className="font-semibold">{formatNumber(totalStats.likes)}</span>
@@ -159,6 +166,13 @@ export default function SearchPage() {
             </div>
           )}
 
+          {/* Hint for demo mode */}
+          {searchResult.isDemo && (searchResult as any).hint && (
+            <div className="rounded-xl bg-amber-500/10 p-4 border border-amber-500/20">
+              <p className="text-sm text-amber-600">{(searchResult as any).hint}</p>
+            </div>
+          )}
+
           {/* Content Grid */}
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
             {searchResult.contents.map((content, index) => (
@@ -180,7 +194,7 @@ export default function SearchPage() {
           </div>
           <h3 className="mb-2 text-lg font-semibold">ไม่พบโพสต์</h3>
           <p className="text-muted-foreground">
-            ลองเปลี่ยนคำค้นหาหรือเปิด Demo Mode เพื่อทดสอบ
+            ลองใส่ชื่อ Facebook Page หรือ URL อื่น
           </p>
         </motion.div>
       )}
