@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ApifyClient } from "apify-client";
 
+// Force dynamic to prevent static generation timeout
+export const dynamic = "force-dynamic";
+
 // Debug endpoint to see raw Apify data structure
 export async function POST(request: NextRequest) {
   try {

@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { PrismaClient } from "@prisma/client";
 
+// Force dynamic to prevent static generation timeout
+export const dynamic = "force-dynamic";
+
 const prisma = new PrismaClient();
 
 async function getOrCreateUser(clerkId: string) {

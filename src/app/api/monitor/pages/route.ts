@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 
+// Force dynamic to prevent static generation timeout
+export const dynamic = "force-dynamic";
+
 // ============================================
 // GET - List all monitored pages for user
 // ============================================

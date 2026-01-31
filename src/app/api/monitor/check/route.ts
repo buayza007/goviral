@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { ApifyClient } from "apify-client";
 
+// Force dynamic to prevent static generation timeout
+export const dynamic = "force-dynamic";
+
 // ============================================
 // Viral Score Calculation
 // ============================================

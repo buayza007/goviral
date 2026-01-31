@@ -3,6 +3,9 @@ import { auth } from "@clerk/nextjs/server";
 import { ApifyClient } from "apify-client";
 import { Platform } from "@prisma/client";
 
+// Force dynamic to prevent static generation timeout
+export const dynamic = "force-dynamic";
+
 // ============================================
 // INTERFACES - Based on apify/facebook-posts-scraper
 // ============================================
