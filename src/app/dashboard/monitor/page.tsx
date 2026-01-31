@@ -517,11 +517,11 @@ export default function MonitorPage() {
                         <p className="text-gray-400 text-sm mt-1">ใน goviral service → Variables → เพิ่ม:</p>
                         <div className="mt-2 flex items-center gap-2">
                           <code className="flex-1 p-2 bg-slate-900 rounded font-mono text-sm text-yellow-400 break-all">
-                            DATABASE_URL = {`${{Postgres.DATABASE_PRIVATE_URL}}`}
+                            DATABASE_URL = {"${{Postgres.DATABASE_PRIVATE_URL}}"}
                           </code>
                           <button
                             onClick={() => {
-                              navigator.clipboard.writeText('${{Postgres.DATABASE_PRIVATE_URL}}');
+                              navigator.clipboard.writeText("${{Postgres.DATABASE_PRIVATE_URL}}");
                               setCopied(true);
                               setTimeout(() => setCopied(false), 2000);
                               toast({ title: "📋 Copied!" });
