@@ -152,7 +152,7 @@ export async function POST(request: NextRequest) {
         .dataset(run.defaultDatasetId)
         .listItems();
 
-      const posts = items as FacebookPost[];
+      const posts = items as unknown as FacebookPost[];
 
       // Process and save results
       const contents = [];
