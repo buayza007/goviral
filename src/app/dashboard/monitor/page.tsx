@@ -23,6 +23,10 @@ import {
   X,
   Clock,
   Link2,
+  Database,
+  Settings,
+  Clipboard,
+  CheckCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -95,22 +99,46 @@ export default function MonitorPage() {
   const [showDebug, setShowDebug] = useState(false);
   const [debugData, setDebugData] = useState<Record<string, unknown> | null>(null);
   const [debugLoading, setDebugLoading] = useState(false);
+  
+  // Setup state
+  const [needsSetup, setNeedsSetup] = useState(false);
+  const [setupError, setSetupError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   // Fetch pages
   const fetchPages = async () => {
     try {
       const res = await fetch("/api/monitor/pages");
       const data = await res.json();
+      
+      // Check if DATABASE_URL is not set
+      if (data.error === "DATABASE_URL not configured" || data.message?.includes("DATABASE_URL")) {
+        setNeedsSetup(true);
+        setSetupError(data.message || "DATABASE_URL not configured");
+        setLoading(false);
+        return;
+      }
+      
       if (data.error) {
         console.error("API Error:", data);
+        // Check for database connection errors
+        if (data.message?.includes("prisma") || data.message?.includes("connect") || data.message?.includes("database")) {
+          setNeedsSetup(true);
+          setSetupError(data.message);
+          setLoading(false);
+          return;
+        }
         toast({ title: "Error", description: data.message || data.error, variant: "destructive" });
       } else if (data.pages) {
+        setNeedsSetup(false);
+        setSetupError(null);
         setPages(data.pages);
         setTotalNewPosts(data.newPosts || 0);
       }
     } catch (err) {
       console.error("Error fetching pages:", err);
-      toast({ title: "Error fetching pages", variant: "destructive" });
+      setNeedsSetup(true);
+      setSetupError(err instanceof Error ? err.message : "Connection failed");
     } finally {
       setLoading(false);
     }
@@ -417,8 +445,150 @@ export default function MonitorPage() {
           </div>
         )}
 
+        {/* Setup Required - DATABASE_URL not configured */}
+        {!loading && needsSetup && (
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-3xl mx-auto">
+            <Card className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 border-red-500/30 overflow-hidden">
+              <CardHeader className="border-b border-slate-700/50 bg-red-500/10">
+                <CardTitle className="flex items-center gap-3 text-red-400">
+                  <AlertCircle className="w-6 h-6" />
+                  ⚠️ ต้องตั้งค่า DATABASE_URL บน Railway
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-6 space-y-6">
+                {/* Error Message */}
+                {setupError && (
+                  <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-300 text-sm font-mono">
+                    {setupError}
+                  </div>
+                )}
+
+                {/* Step by Step Guide */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+                    <Settings className="w-5 h-5 text-orange-400" />
+                    วิธีตั้งค่า (ทำตามนี้เลย)
+                  </h3>
+                  
+                  <div className="space-y-3">
+                    {/* Step 1 */}
+                    <div className="flex gap-3 p-4 bg-slate-800/50 rounded-lg border border-slate-700">
+                      <div className="flex-shrink-0 w-8 h-8 rounded-full bg-orange-500 flex items-center justify-center text-white font-bold">1</div>
+                      <div>
+                        <p className="font-medium text-white">เปิด Railway Dashboard</p>
+                        <p className="text-gray-400 text-sm mt-1">ไปที่ project ของคุณ → คลิก <span className="text-green-400 font-medium">Postgres service</span></p>
+                      </div>
+                    </div>
+
+                    {/* Step 2 */}
+                    <div className="flex gap-3 p-4 bg-slate-800/50 rounded-lg border border-slate-700">
+                      <div className="flex-shrink-0 w-8 h-8 rounded-full bg-orange-500 flex items-center justify-center text-white font-bold">2</div>
+                      <div>
+                        <p className="font-medium text-white">Copy DATABASE_URL</p>
+                        <p className="text-gray-400 text-sm mt-1">ไปที่ tab <span className="text-blue-400 font-medium">Variables</span> → Copy ค่า <span className="text-yellow-400 font-mono">DATABASE_PRIVATE_URL</span></p>
+                        <p className="text-gray-500 text-xs mt-1">(ใช้ PRIVATE_URL เพื่อหลีกเลี่ยง egress fees)</p>
+                      </div>
+                    </div>
+
+                    {/* Step 3 */}
+                    <div className="flex gap-3 p-4 bg-slate-800/50 rounded-lg border border-slate-700">
+                      <div className="flex-shrink-0 w-8 h-8 rounded-full bg-orange-500 flex items-center justify-center text-white font-bold">3</div>
+                      <div>
+                        <p className="font-medium text-white">เพิ่ม Variable ใน goviral service</p>
+                        <p className="text-gray-400 text-sm mt-1">คลิก <span className="text-green-400 font-medium">goviral</span> service → tab <span className="text-blue-400 font-medium">Variables</span> → <span className="text-white">+ New Variable</span></p>
+                        <div className="mt-2 p-2 bg-slate-900 rounded font-mono text-sm">
+                          <div className="flex items-center justify-between">
+                            <span className="text-gray-400">Name:</span>
+                            <span className="text-white">DATABASE_URL</span>
+                          </div>
+                          <div className="flex items-center justify-between mt-1">
+                            <span className="text-gray-400">Value:</span>
+                            <span className="text-yellow-400">[paste ค่าที่ copy มา]</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Step 4 - Alternative */}
+                    <div className="flex gap-3 p-4 bg-slate-800/50 rounded-lg border border-green-500/30">
+                      <div className="flex-shrink-0 w-8 h-8 rounded-full bg-green-500 flex items-center justify-center text-white font-bold">💡</div>
+                      <div>
+                        <p className="font-medium text-green-400">วิธีลัด: ใช้ Reference Variable</p>
+                        <p className="text-gray-400 text-sm mt-1">ใน goviral service → Variables → เพิ่ม:</p>
+                        <div className="mt-2 flex items-center gap-2">
+                          <code className="flex-1 p-2 bg-slate-900 rounded font-mono text-sm text-yellow-400 break-all">
+                            DATABASE_URL = {`${{Postgres.DATABASE_PRIVATE_URL}}`}
+                          </code>
+                          <button
+                            onClick={() => {
+                              navigator.clipboard.writeText('${{Postgres.DATABASE_PRIVATE_URL}}');
+                              setCopied(true);
+                              setTimeout(() => setCopied(false), 2000);
+                              toast({ title: "📋 Copied!" });
+                            }}
+                            className="p-2 bg-slate-700 hover:bg-slate-600 rounded"
+                          >
+                            {copied ? <CheckCircle className="w-4 h-4 text-green-400" /> : <Clipboard className="w-4 h-4 text-gray-400" />}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Step 5 */}
+                    <div className="flex gap-3 p-4 bg-slate-800/50 rounded-lg border border-slate-700">
+                      <div className="flex-shrink-0 w-8 h-8 rounded-full bg-orange-500 flex items-center justify-center text-white font-bold">4</div>
+                      <div>
+                        <p className="font-medium text-white">Redeploy</p>
+                        <p className="text-gray-400 text-sm mt-1">กด <span className="text-blue-400 font-medium">Deploy</span> หรือรอ auto-deploy แล้วกลับมาหน้านี้</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex flex-wrap gap-3 pt-4 border-t border-slate-700">
+                  <Button
+                    onClick={runDebug}
+                    disabled={debugLoading}
+                    variant="outline"
+                    className="border-amber-500/50 text-amber-400 hover:bg-amber-500/10"
+                  >
+                    {debugLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Bug className="w-4 h-4 mr-2" />}
+                    เช็คสถานะ DB
+                  </Button>
+                  <Button
+                    onClick={runMigration}
+                    disabled={debugLoading}
+                    variant="outline"
+                    className="border-green-500/50 text-green-400 hover:bg-green-500/10"
+                  >
+                    {debugLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Database className="w-4 h-4 mr-2" />}
+                    Run Migration
+                  </Button>
+                  <Button
+                    onClick={() => fetchPages()}
+                    className="bg-orange-500 hover:bg-orange-600"
+                  >
+                    <RefreshCw className="w-4 h-4 mr-2" />
+                    ลองอีกครั้ง
+                  </Button>
+                  <a
+                    href="https://railway.app/dashboard"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-purple-500 hover:bg-purple-600 text-white rounded-lg font-medium"
+                  >
+                    <ExternalLink className="w-4 h-4" />
+                    เปิด Railway
+                  </a>
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+        )}
+
         {/* Empty State */}
-        {!loading && pages.length === 0 && (
+        {!loading && !needsSetup && pages.length === 0 && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center py-16">
             <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-slate-800 flex items-center justify-center">
               <Eye className="w-10 h-10 text-gray-500" />
@@ -433,7 +603,7 @@ export default function MonitorPage() {
         )}
 
         {/* Pages List */}
-        {!loading && pages.length > 0 && (
+        {!loading && !needsSetup && pages.length > 0 && (
           <div className="grid lg:grid-cols-3 gap-6">
             {/* Pages Sidebar */}
             <div className="lg:col-span-1 space-y-3">

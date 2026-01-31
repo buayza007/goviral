@@ -5,8 +5,35 @@ import { PrismaClient } from "@prisma/client";
 // Force dynamic
 export const dynamic = "force-dynamic";
 
-// Create Prisma client
-const prisma = new PrismaClient();
+// Check DATABASE_URL helper
+function checkDatabaseUrl(): { ok: boolean; error?: NextResponse } {
+  if (!process.env.DATABASE_URL) {
+    return {
+      ok: false,
+      error: NextResponse.json({
+        error: "DATABASE_URL not configured",
+        message: "กรุณาตั้งค่า DATABASE_URL ใน Railway Dashboard → goviral service → Variables → เพิ่ม DATABASE_URL = ${{Postgres.DATABASE_PRIVATE_URL}}",
+        help: {
+          step1: "ไป Railway Dashboard",
+          step2: "คลิก Postgres service → Variables → Copy DATABASE_PRIVATE_URL",
+          step3: "คลิก goviral service → Variables → Add New → Name: DATABASE_URL, Value: [paste]",
+          step4: "Redeploy",
+          shortcut: "หรือใช้ reference: DATABASE_URL = ${{Postgres.DATABASE_PRIVATE_URL}}"
+        }
+      }, { status: 500 })
+    };
+  }
+  return { ok: true };
+}
+
+// Create Prisma client (only if DATABASE_URL exists)
+let prisma: PrismaClient;
+try {
+  prisma = new PrismaClient();
+} catch (e) {
+  console.error("Failed to create Prisma client:", e);
+  prisma = null as unknown as PrismaClient;
+}
 
 // ============================================
 // Helper: Create tables if they don't exist
@@ -89,6 +116,10 @@ function generateId(): string {
 // ============================================
 export async function GET(request: NextRequest) {
   try {
+    // Check DATABASE_URL first
+    const dbCheck = checkDatabaseUrl();
+    if (!dbCheck.ok) return dbCheck.error!;
+
     const { userId: clerkId } = await auth();
     if (!clerkId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -189,6 +220,10 @@ export async function GET(request: NextRequest) {
 // ============================================
 export async function POST(request: NextRequest) {
   try {
+    // Check DATABASE_URL first
+    const dbCheck = checkDatabaseUrl();
+    if (!dbCheck.ok) return dbCheck.error!;
+
     const { userId: clerkId } = await auth();
     if (!clerkId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -293,6 +328,10 @@ export async function POST(request: NextRequest) {
 // ============================================
 export async function DELETE(request: NextRequest) {
   try {
+    // Check DATABASE_URL first
+    const dbCheck = checkDatabaseUrl();
+    if (!dbCheck.ok) return dbCheck.error!;
+
     const { userId: clerkId } = await auth();
     if (!clerkId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -334,6 +373,10 @@ export async function DELETE(request: NextRequest) {
 // ============================================
 export async function PATCH(request: NextRequest) {
   try {
+    // Check DATABASE_URL first
+    const dbCheck = checkDatabaseUrl();
+    if (!dbCheck.ok) return dbCheck.error!;
+
     const { userId: clerkId } = await auth();
     if (!clerkId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
