@@ -6,36 +6,45 @@ import {
   Heart,
   MessageCircle,
   Share2,
-  Eye,
   ExternalLink,
-  TrendingUp,
   Flame,
+  Trophy,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import {
-  formatNumber,
-  truncateText,
-  getEngagementLevel,
-  formatDate,
-} from "@/lib/utils";
+import { formatNumber, truncateText } from "@/lib/utils";
 import type { Content } from "@/lib/api";
 
 interface ContentCardProps {
-  content: Content;
+  content: Content & { rank?: number; viralScore?: number };
   rank?: number;
 }
 
+function getScoreColor(score: number): string {
+  if (score >= 100000) return "text-yellow-400";
+  if (score >= 50000) return "text-orange-400";
+  if (score >= 20000) return "text-viral-400";
+  return "text-green-400";
+}
+
+function getScoreLabel(score: number): string {
+  if (score >= 100000) return "🔥 MEGA VIRAL";
+  if (score >= 50000) return "🚀 SUPER VIRAL";
+  if (score >= 20000) return "⚡ VIRAL";
+  return "📈 TRENDING";
+}
+
 export function ContentCard({ content, rank }: ContentCardProps) {
-  const engagementLevel = getEngagementLevel(content.engagementScore);
+  const displayRank = rank !== undefined ? rank : (content.rank ? content.rank - 1 : undefined);
+  const viralScore = content.viralScore || content.engagementScore;
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3, delay: rank ? rank * 0.05 : 0 }}
+      transition={{ duration: 0.3, delay: displayRank !== undefined ? displayRank * 0.1 : 0 }}
     >
-      <Card className="content-card group overflow-hidden">
+      <Card className="content-card group overflow-hidden hover:shadow-xl hover:shadow-viral-500/10 transition-all duration-300">
         {/* Image Header */}
         <div className="relative aspect-video overflow-hidden bg-muted">
           {content.imageUrl ? (
@@ -45,47 +54,54 @@ export function ContentCard({ content, rank }: ContentCardProps) {
               fill
               className="object-cover transition-transform duration-500 group-hover:scale-105"
               sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+              unoptimized
             />
           ) : (
             <div className="flex h-full items-center justify-center bg-gradient-to-br from-viral-500/20 to-ocean-500/20">
-              <span className="text-4xl">📷</span>
+              <span className="text-5xl">📱</span>
             </div>
           )}
 
           {/* Rank Badge */}
-          {rank !== undefined && rank < 3 && (
+          {displayRank !== undefined && displayRank < 5 && (
             <div className="absolute left-3 top-3">
               <div
-                className={`flex items-center gap-1 rounded-full px-3 py-1 text-sm font-bold backdrop-blur-sm ${
-                  rank === 0
-                    ? "bg-yellow-500/90 text-yellow-900"
-                    : rank === 1
-                    ? "bg-gray-300/90 text-gray-800"
-                    : "bg-amber-600/90 text-amber-100"
+                className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-bold backdrop-blur-md shadow-lg ${
+                  displayRank === 0
+                    ? "bg-gradient-to-r from-yellow-400 to-amber-500 text-yellow-900"
+                    : displayRank === 1
+                    ? "bg-gradient-to-r from-gray-300 to-gray-400 text-gray-800"
+                    : displayRank === 2
+                    ? "bg-gradient-to-r from-amber-500 to-orange-600 text-amber-100"
+                    : "bg-black/60 text-white"
                 }`}
               >
-                {rank === 0 ? "🥇" : rank === 1 ? "🥈" : "🥉"} #{rank + 1}
+                {displayRank === 0 ? (
+                  <Trophy className="h-4 w-4" />
+                ) : (
+                  <span>{displayRank === 1 ? "🥈" : displayRank === 2 ? "🥉" : `#${displayRank + 1}`}</span>
+                )}
+                {displayRank === 0 && "อันดับ 1"}
               </div>
             </div>
           )}
 
-          {/* Viral Badge */}
+          {/* Viral Score Badge */}
           <div className="absolute right-3 top-3">
-            <div
-              className={`flex items-center gap-1 rounded-full bg-black/60 px-3 py-1 text-sm font-medium backdrop-blur-sm ${engagementLevel.color}`}
-            >
-              {content.engagementScore >= 10000 && (
-                <Flame className="h-4 w-4" />
-              )}
-              {engagementLevel.label}
+            <div className={`flex items-center gap-1 rounded-full bg-black/70 px-3 py-1.5 text-sm font-bold backdrop-blur-md ${getScoreColor(viralScore)}`}>
+              <Flame className="h-4 w-4" />
+              {formatNumber(viralScore)}
             </div>
           </div>
 
           {/* Overlay on Hover */}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
 
           {/* View Button */}
-          <div className="absolute bottom-3 right-3 opacity-0 transition-all duration-300 group-hover:opacity-100">
+          <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between opacity-0 transition-all duration-300 group-hover:opacity-100">
+            <span className={`text-sm font-bold ${getScoreColor(viralScore)}`}>
+              {getScoreLabel(viralScore)}
+            </span>
             <Button
               size="sm"
               variant="secondary"
@@ -100,66 +116,58 @@ export function ContentCard({ content, rank }: ContentCardProps) {
 
         {/* Content Body */}
         <div className="p-5">
-          {/* Page Name */}
-          {content.pageName && (
-            <div className="mb-2 flex items-center gap-2">
-              <div className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-500/20">
-                <span className="text-xs">📱</span>
-              </div>
-              <span className="text-sm font-medium text-muted-foreground">
-                {content.pageName}
-              </span>
-              {content.postedAt && (
-                <span className="text-xs text-muted-foreground">
-                  • {formatDate(content.postedAt)}
-                </span>
-              )}
-            </div>
-          )}
-
           {/* Caption */}
-          <p className="mb-4 text-sm leading-relaxed text-foreground/90">
+          <p className="mb-4 text-sm leading-relaxed text-foreground/90 min-h-[60px]">
             {content.caption
-              ? truncateText(content.caption, 150)
+              ? truncateText(content.caption, 120)
               : "ไม่มีข้อความ"}
           </p>
 
           {/* Engagement Stats */}
-          <div className="grid grid-cols-4 gap-2">
+          <div className="grid grid-cols-3 gap-3">
             <StatBadge
               icon={<Heart className="h-4 w-4" />}
               value={content.likesCount}
               label="Likes"
               color="text-pink-500"
+              bgColor="bg-pink-500/10"
+              multiplier="×1"
             />
             <StatBadge
               icon={<MessageCircle className="h-4 w-4" />}
               value={content.commentsCount}
               label="Comments"
               color="text-blue-500"
+              bgColor="bg-blue-500/10"
+              multiplier="×3"
             />
             <StatBadge
               icon={<Share2 className="h-4 w-4" />}
               value={content.sharesCount}
               label="Shares"
               color="text-green-500"
-            />
-            <StatBadge
-              icon={<TrendingUp className="h-4 w-4" />}
-              value={content.engagementScore}
-              label="Score"
-              color="text-viral-500"
-              highlight
+              bgColor="bg-green-500/10"
+              multiplier="×5"
             />
           </div>
 
-          {/* View Count (if available) */}
-          {content.viewsCount > 0 && (
-            <div className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
-              <Eye className="h-4 w-4" />
-              <span>{formatNumber(content.viewsCount)} views</span>
+          {/* Viral Score Bar */}
+          <div className="mt-4 pt-4 border-t border-border/50">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs text-muted-foreground">Viral Score</span>
+              <span className={`text-sm font-bold ${getScoreColor(viralScore)}`}>
+                {formatNumber(viralScore)} pts
+              </span>
             </div>
-          )}
+            <div className="h-2 rounded-full bg-muted overflow-hidden">
+              <motion.div
+                initial={{ width: 0 }}
+                animate={{ width: `${Math.min((viralScore / 200000) * 100, 100)}%` }}
+                transition={{ duration: 1, delay: 0.2 }}
+                className="h-full rounded-full bg-gradient-to-r from-viral-500 to-orange-500"
+              />
+            </div>
+          </div>
         </div>
       </Card>
     </motion.div>
@@ -171,23 +179,17 @@ interface StatBadgeProps {
   value: number;
   label: string;
   color: string;
-  highlight?: boolean;
+  bgColor: string;
+  multiplier: string;
 }
 
-function StatBadge({ icon, value, label, color, highlight }: StatBadgeProps) {
+function StatBadge({ icon, value, label, color, bgColor, multiplier }: StatBadgeProps) {
   return (
-    <div
-      className={`flex flex-col items-center rounded-xl p-2 transition-colors ${
-        highlight ? "bg-viral-500/10" : "bg-muted/50 hover:bg-muted"
-      }`}
-    >
+    <div className={`flex flex-col items-center rounded-xl p-3 ${bgColor} transition-transform hover:scale-105`}>
       <div className={`mb-1 ${color}`}>{icon}</div>
-      <span
-        className={`text-sm font-bold ${highlight ? "text-viral-500" : ""}`}
-      >
-        {formatNumber(value)}
-      </span>
+      <span className="text-sm font-bold">{formatNumber(value)}</span>
       <span className="text-[10px] text-muted-foreground">{label}</span>
+      <span className={`text-[9px] font-medium ${color}`}>{multiplier}</span>
     </div>
   );
 }

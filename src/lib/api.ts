@@ -66,6 +66,8 @@ export interface Content {
   viewsCount: number;
   engagementScore: number;
   reactionsJson: Record<string, number> | null;
+  rank?: number;
+  viralScore?: number;
 }
 
 export interface SearchResult {
@@ -74,6 +76,7 @@ export interface SearchResult {
   resultCount: number;
   contents: Content[];
   isDemo?: boolean;
+  scoringFormula?: string;
 }
 
 export interface SearchQuery {

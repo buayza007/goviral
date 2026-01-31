@@ -2,28 +2,28 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Sparkles, TrendingUp, Lightbulb } from "lucide-react";
+import { Sparkles, TrendingUp, Lightbulb, Trophy, Flame } from "lucide-react";
 import { SearchForm } from "@/components/dashboard/search-form";
 import { ContentCard } from "@/components/dashboard/content-card";
-import { EngagementChart } from "@/components/dashboard/engagement-chart";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { SearchResult } from "@/lib/api";
+import { formatNumber } from "@/lib/utils";
 
 const searchTips = [
   {
-    icon: "💡",
-    title: "ใช้ URL โดยตรง",
-    description: "วาง URL ของ Facebook Page เพื่อผลลัพธ์ที่แม่นยำกว่า",
-  },
-  {
-    icon: "🎯",
-    title: "ชื่อ Page ที่ชัดเจน",
-    description: "ใส่ชื่อ Page ที่ต้องการติดตามให้ถูกต้อง",
+    icon: "🔥",
+    title: "คำค้นหาเฉพาะเจาะจง",
+    description: "ใช้คำที่ชัดเจน เช่น 'ลดน้ำหนัก 7 วัน' แทน 'ลดน้ำหนัก'",
   },
   {
     icon: "📊",
-    title: "เลือกจำนวนโพสต์",
-    description: "ยิ่งดึงมาก ยิ่งได้ข้อมูลเยอะ แต่อาจใช้เวลานานขึ้น",
+    title: "Viral Score Formula",
+    description: "Likes×1 + Comments×3 + Shares×5 = คะแนนไวรัล",
+  },
+  {
+    icon: "🚀",
+    title: "Shares มีค่ามากที่สุด",
+    description: "เพราะ Share แสดงถึงการแพร่กระจายที่แท้จริง",
   },
 ];
 
@@ -34,21 +34,16 @@ export default function SearchPage() {
     setSearchResult(result);
   };
 
-  // Prepare chart data
-  const chartData =
-    searchResult?.contents.slice(0, 5).map((content, index) => ({
-      name: `#${index + 1}`,
-      label:
-        content.caption?.substring(0, 30) + "..." ||
-        content.pageName ||
-        `Post ${index + 1}`,
-      likes: content.likesCount,
-      comments: content.commentsCount,
-      shares: content.sharesCount,
-      views: content.viewsCount,
-      total: content.engagementScore,
-      reactions: content.reactionsJson,
-    })) || [];
+  // Calculate total stats
+  const totalStats = searchResult?.contents.reduce(
+    (acc, content) => ({
+      likes: acc.likes + content.likesCount,
+      comments: acc.comments + content.commentsCount,
+      shares: acc.shares + content.sharesCount,
+      score: acc.score + (content.viralScore || content.engagementScore),
+    }),
+    { likes: 0, comments: 0, shares: 0, score: 0 }
+  );
 
   return (
     <div className="space-y-8">
@@ -64,7 +59,7 @@ export default function SearchPage() {
           <div>
             <h1 className="text-2xl font-bold">ค้นหา Viral Content</h1>
             <p className="text-muted-foreground">
-              ค้นหาโพสต์ที่มี Engagement สูงจาก Facebook Page
+              ค้นหาโพสต์ไวรัลจาก Facebook ด้วย Viral Scoring Algorithm
             </p>
           </div>
         </div>
@@ -81,7 +76,7 @@ export default function SearchPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg">
               <Lightbulb className="h-5 w-5 text-yellow-500" />
-              เคล็ดลับการค้นหา
+              วิธีใช้งาน
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -111,28 +106,61 @@ export default function SearchPage() {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="space-y-8"
+          className="space-y-6"
         >
           {/* Results Header */}
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-green-500/20">
-              <Sparkles className="h-5 w-5 text-green-500" />
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-green-500/20">
+                <Trophy className="h-5 w-5 text-green-500" />
+              </div>
+              <div>
+                <h2 className="text-xl font-semibold">
+                  🏆 Top {searchResult.resultCount} โพสต์ไวรัล
+                </h2>
+                <p className="text-sm text-muted-foreground">
+                  เรียงตาม Viral Score สูงสุด
+                  {searchResult.isDemo && (
+                    <span className="ml-2 text-amber-500">(Demo Mode)</span>
+                  )}
+                </p>
+              </div>
             </div>
-            <div>
-              <h2 className="text-xl font-semibold">
-                พบ {searchResult.resultCount} โพสต์
-              </h2>
-              <p className="text-sm text-muted-foreground">
-                เรียงตาม Engagement Score สูงสุด
-              </p>
-            </div>
+
+            {/* Total Stats */}
+            {totalStats && (
+              <div className="flex gap-4 text-sm">
+                <div className="flex items-center gap-1.5 rounded-full bg-pink-500/10 px-3 py-1.5">
+                  <span className="text-pink-500">❤️</span>
+                  <span className="font-semibold">{formatNumber(totalStats.likes)}</span>
+                </div>
+                <div className="flex items-center gap-1.5 rounded-full bg-blue-500/10 px-3 py-1.5">
+                  <span className="text-blue-500">💬</span>
+                  <span className="font-semibold">{formatNumber(totalStats.comments)}</span>
+                </div>
+                <div className="flex items-center gap-1.5 rounded-full bg-green-500/10 px-3 py-1.5">
+                  <span className="text-green-500">🔄</span>
+                  <span className="font-semibold">{formatNumber(totalStats.shares)}</span>
+                </div>
+                <div className="flex items-center gap-1.5 rounded-full bg-viral-500/10 px-3 py-1.5">
+                  <Flame className="h-4 w-4 text-viral-500" />
+                  <span className="font-semibold text-viral-500">{formatNumber(totalStats.score)}</span>
+                </div>
+              </div>
+            )}
           </div>
 
-          {/* Chart */}
-          <EngagementChart data={chartData} />
+          {/* Scoring Formula Badge */}
+          {searchResult.scoringFormula && (
+            <div className="inline-flex items-center gap-2 rounded-full bg-muted px-4 py-2 text-sm">
+              <Sparkles className="h-4 w-4 text-viral-500" />
+              <span className="text-muted-foreground">Formula:</span>
+              <code className="font-mono text-viral-500">{searchResult.scoringFormula}</code>
+            </div>
+          )}
 
           {/* Content Grid */}
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
             {searchResult.contents.map((content, index) => (
               <ContentCard key={content.id} content={content} rank={index} />
             ))}
@@ -152,7 +180,7 @@ export default function SearchPage() {
           </div>
           <h3 className="mb-2 text-lg font-semibold">ไม่พบโพสต์</h3>
           <p className="text-muted-foreground">
-            ลองเปลี่ยนคำค้นหาหรือใช้ URL ของ Page โดยตรง
+            ลองเปลี่ยนคำค้นหาหรือเปิด Demo Mode เพื่อทดสอบ
           </p>
         </motion.div>
       )}

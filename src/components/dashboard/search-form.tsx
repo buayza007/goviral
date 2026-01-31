@@ -3,17 +3,10 @@
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { Search, Loader2, Facebook, Instagram, Sparkles, Zap } from "lucide-react";
+import { Search, Loader2, Facebook, Sparkles, Zap, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { searchApi, type SearchResult } from "@/lib/api";
 import { toast } from "@/components/ui/use-toast";
@@ -26,29 +19,31 @@ const suggestedKeywords = [
   "ลดน้ำหนัก",
   "การตลาดออนไลน์",
   "สูตรอาหาร",
-  "แฟชั่น2024",
+  "แฟชั่น",
   "ฟิตเนส",
   "ท่องเที่ยว",
-  "เงินออม",
-  "สุขภาพ",
+  "หุ้น",
+  "คริปโต",
 ];
 
 export function SearchForm({ onSearchComplete }: SearchFormProps) {
   const [keyword, setKeyword] = useState("");
-  const [platform, setPlatform] = useState<"FACEBOOK" | "INSTAGRAM" | "TIKTOK">(
-    "FACEBOOK"
-  );
-  const [maxPosts, setMaxPosts] = useState(5);
-  const [demoMode, setDemoMode] = useState(true);
+  const [demoMode, setDemoMode] = useState(false);
 
   const searchMutation = useMutation({
     mutationFn: async () => {
-      return searchApi.syncSearch({ keyword, platform, maxPosts, demoMode });
+      return searchApi.syncSearch({ 
+        keyword, 
+        platform: "FACEBOOK", 
+        maxPosts: 5, 
+        demoMode 
+      });
     },
     onSuccess: (result) => {
+      const modeText = result.isDemo ? " (Demo)" : " (Real Data)";
       toast({
-        title: "🎉 ค้นหาสำเร็จ!",
-        description: `พบ ${result.resultCount} โพสต์ที่น่าสนใจ${result.isDemo ? " (Demo Mode)" : ""}`,
+        title: "🔥 ค้นหาสำเร็จ!",
+        description: `พบ ${result.resultCount} โพสต์ไวรัล${modeText}`,
         variant: "default",
       });
       onSearchComplete?.(result);
@@ -67,16 +62,12 @@ export function SearchForm({ onSearchComplete }: SearchFormProps) {
     if (!keyword.trim()) {
       toast({
         title: "กรุณากรอก Keyword",
-        description: "ใส่คำค้นหาหรือชื่อ Page ที่ต้องการ",
+        description: "พิมพ์คำค้นหาที่ต้องการ",
         variant: "destructive",
       });
       return;
     }
     searchMutation.mutate();
-  };
-
-  const handleSuggestionClick = (suggestion: string) => {
-    setKeyword(suggestion);
   };
 
   return (
@@ -87,23 +78,45 @@ export function SearchForm({ onSearchComplete }: SearchFormProps) {
             <Search className="h-5 w-5 text-viral-500" />
           </div>
           <div>
-            <h2 className="text-xl font-semibold">ค้นหา Viral Content</h2>
+            <h2 className="text-xl font-semibold">Facebook Viral Search</h2>
             <p className="text-sm font-normal text-muted-foreground">
-              พิมพ์คำค้นหาเพื่อดูโพสต์ที่มี Engagement สูงสุด
+              ค้นหาโพสต์ที่มี Engagement สูงสุดจาก Facebook
             </p>
           </div>
         </CardTitle>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Viral Score Formula Info */}
+          <div className="rounded-xl bg-gradient-to-r from-viral-500/10 to-ocean-500/10 p-4 border border-viral-500/20">
+            <div className="flex items-start gap-3">
+              <Info className="h-5 w-5 text-viral-500 mt-0.5" />
+              <div>
+                <p className="font-semibold text-viral-500">Viral Score Algorithm</p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  <code className="bg-muted px-2 py-0.5 rounded text-xs">
+                    (Likes × 1) + (Comments × 3) + (Shares × 5)
+                  </code>
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Shares มีค่ามากที่สุด → Comments → Likes (เพราะ Share = Virality แท้จริง)
+                </p>
+              </div>
+            </div>
+          </div>
+
           {/* Demo Mode Toggle */}
           <div className="flex items-center justify-between rounded-xl bg-amber-500/10 p-4 border border-amber-500/20">
             <div className="flex items-center gap-3">
               <Zap className="h-5 w-5 text-amber-500" />
               <div>
-                <p className="font-medium text-amber-500">Demo Mode</p>
+                <p className="font-medium text-amber-600">
+                  {demoMode ? "Demo Mode (ข้อมูลตัวอย่าง)" : "Live Mode (Apify API)"}
+                </p>
                 <p className="text-xs text-muted-foreground">
-                  ใช้ข้อมูลตัวอย่างเพื่อทดสอบระบบ
+                  {demoMode 
+                    ? "ใช้ข้อมูล Mock เพื่อทดสอบ" 
+                    : "ดึงข้อมูลจริงจาก Facebook ผ่าน Apify"}
                 </p>
               </div>
             </div>
@@ -111,72 +124,33 @@ export function SearchForm({ onSearchComplete }: SearchFormProps) {
               type="button"
               onClick={() => setDemoMode(!demoMode)}
               className={`relative w-14 h-7 rounded-full transition-colors ${
-                demoMode ? "bg-amber-500" : "bg-muted"
+                demoMode ? "bg-amber-500" : "bg-green-500"
               }`}
             >
               <span
-                className={`absolute top-1 w-5 h-5 rounded-full bg-white transition-transform ${
+                className={`absolute top-1 w-5 h-5 rounded-full bg-white transition-transform shadow-sm ${
                   demoMode ? "translate-x-8" : "translate-x-1"
                 }`}
               />
             </button>
           </div>
 
-          <div className="grid gap-6 md:grid-cols-2">
-            {/* Keyword Input */}
-            <div className="space-y-2">
-              <Label htmlFor="keyword" className="text-sm font-medium">
-                คำค้นหา
-              </Label>
-              <div className="relative">
-                <Input
-                  id="keyword"
-                  placeholder="พิมพ์คำค้นหา เช่น ลดน้ำหนัก, การตลาด..."
-                  value={keyword}
-                  onChange={(e) => setKeyword(e.target.value)}
-                  className="h-12 pl-4 pr-12"
-                />
-                <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                  <Sparkles className="h-5 w-5 text-muted-foreground" />
-                </div>
+          {/* Keyword Input */}
+          <div className="space-y-2">
+            <Label htmlFor="keyword" className="text-sm font-medium">
+              คำค้นหา (Keyword)
+            </Label>
+            <div className="relative">
+              <Input
+                id="keyword"
+                placeholder="พิมพ์คำค้นหา เช่น ลดน้ำหนัก, การตลาด, สูตรอาหาร..."
+                value={keyword}
+                onChange={(e) => setKeyword(e.target.value)}
+                className="h-14 pl-4 pr-12 text-lg"
+              />
+              <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                <Sparkles className="h-5 w-5 text-muted-foreground" />
               </div>
-            </div>
-
-            {/* Platform Select */}
-            <div className="space-y-2">
-              <Label htmlFor="platform" className="text-sm font-medium">
-                แพลตฟอร์ม
-              </Label>
-              <Select
-                value={platform}
-                onValueChange={(v) =>
-                  setPlatform(v as "FACEBOOK" | "INSTAGRAM" | "TIKTOK")
-                }
-              >
-                <SelectTrigger className="h-12">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="FACEBOOK">
-                    <div className="flex items-center gap-2">
-                      <Facebook className="h-4 w-4 text-blue-500" />
-                      Facebook
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="INSTAGRAM">
-                    <div className="flex items-center gap-2">
-                      <Instagram className="h-4 w-4 text-pink-500" />
-                      Instagram
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="TIKTOK" disabled>
-                    <div className="flex items-center gap-2">
-                      <span className="text-muted-foreground">🎵</span>
-                      TikTok (เร็วๆ นี้)
-                    </div>
-                  </SelectItem>
-                </SelectContent>
-              </Select>
             </div>
           </div>
 
@@ -188,11 +162,11 @@ export function SearchForm({ onSearchComplete }: SearchFormProps) {
                 <button
                   key={suggestion}
                   type="button"
-                  onClick={() => handleSuggestionClick(suggestion)}
-                  className={`rounded-full px-3 py-1.5 text-sm transition-colors ${
+                  onClick={() => setKeyword(suggestion)}
+                  className={`rounded-full px-4 py-2 text-sm font-medium transition-all ${
                     keyword === suggestion
-                      ? "bg-viral-500 text-white"
-                      : "bg-muted hover:bg-muted/80 text-foreground"
+                      ? "bg-viral-500 text-white shadow-lg shadow-viral-500/30"
+                      : "bg-muted hover:bg-muted/80 hover:scale-105"
                   }`}
                 >
                   {suggestion}
@@ -201,29 +175,10 @@ export function SearchForm({ onSearchComplete }: SearchFormProps) {
             </div>
           </div>
 
-          {/* Max Posts Slider */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label className="text-sm font-medium">
-                จำนวนโพสต์ที่ต้องการ
-              </Label>
-              <span className="text-sm text-viral-500 font-semibold">
-                {maxPosts} โพสต์
-              </span>
-            </div>
-            <input
-              type="range"
-              min="5"
-              max="20"
-              step="5"
-              value={maxPosts}
-              onChange={(e) => setMaxPosts(parseInt(e.target.value))}
-              className="w-full h-2 bg-muted rounded-lg appearance-none cursor-pointer accent-viral-500"
-            />
-            <div className="flex justify-between text-xs text-muted-foreground">
-              <span>5</span>
-              <span>20</span>
-            </div>
+          {/* Platform Badge */}
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Facebook className="h-4 w-4 text-blue-500" />
+            <span>ค้นหาจาก Facebook Search Posts</span>
           </div>
 
           {/* Submit Button */}
@@ -232,8 +187,8 @@ export function SearchForm({ onSearchComplete }: SearchFormProps) {
               type="submit"
               variant="viral"
               size="xl"
-              className="w-full"
-              disabled={searchMutation.isPending}
+              className="w-full h-14 text-lg"
+              disabled={searchMutation.isPending || !keyword.trim()}
             >
               {searchMutation.isPending ? (
                 <>
@@ -243,13 +198,13 @@ export function SearchForm({ onSearchComplete }: SearchFormProps) {
               ) : (
                 <>
                   <Search className="mr-2 h-5 w-5" />
-                  🔥 ค้นหาโพสต์ไวรัล
+                  🔥 ค้นหา Top 5 โพสต์ไวรัล
                 </>
               )}
             </Button>
           </motion.div>
 
-          {/* Tips */}
+          {/* Loading Tips */}
           {searchMutation.isPending && (
             <motion.div
               initial={{ opacity: 0, y: 10 }}
@@ -257,7 +212,9 @@ export function SearchForm({ onSearchComplete }: SearchFormProps) {
               className="rounded-xl bg-viral-500/10 p-4 text-center"
             >
               <p className="text-sm text-viral-400">
-                💡 กำลังวิเคราะห์ข้อมูล... อาจใช้เวลาสักครู่
+                💡 {demoMode 
+                  ? "กำลังสร้างข้อมูลตัวอย่าง..." 
+                  : "กำลังดึงข้อมูลจาก Facebook... อาจใช้เวลา 30-60 วินาที"}
               </p>
             </motion.div>
           )}
