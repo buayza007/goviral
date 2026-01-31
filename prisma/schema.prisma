@@ -25,7 +25,8 @@ model User {
   updatedAt        DateTime       @updatedAt
 
   // Relations
-  searchQueries SearchQuery[]
+  searchQueries   SearchQuery[]
+  monitoredPages  MonitoredPage[]
 
   @@index([clerkId])
   @@index([email])
@@ -114,4 +115,57 @@ model Content {
   @@index([searchQueryId])
   @@index([engagementScore(sort: Desc)])
   @@index([postedAt])
+}
+
+// Monitored Page Model - Track competitor pages
+model MonitoredPage {
+  id            String    @id @default(cuid())
+  userId        String
+  pageUrl       String    // Facebook page URL
+  pageName      String?   // Page display name
+  pageAvatar    String?   // Page profile image
+  isActive      Boolean   @default(true)
+  checkInterval Int       @default(60) // Check interval in minutes
+  lastCheckedAt DateTime?
+  lastPostId    String?   // Track last seen post to detect new ones
+  totalPosts    Int       @default(0)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  user  User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  posts MonitoredPost[]
+
+  @@unique([userId, pageUrl])
+  @@index([userId])
+  @@index([isActive])
+}
+
+// Monitored Post Model - Posts discovered from monitored pages
+model MonitoredPost {
+  id           String    @id @default(cuid())
+  pageId       String
+  postId       String    // Original Facebook post ID
+  postUrl      String
+  caption      String?   @db.Text
+  imageUrl     String?
+  videoUrl     String?
+  authorName   String?
+  likesCount   Int       @default(0)
+  commentsCount Int      @default(0)
+  sharesCount  Int       @default(0)
+  viewsCount   Int       @default(0)
+  viralScore   Int       @default(0)
+  postedAt     DateTime?
+  discoveredAt DateTime  @default(now())
+  isNew        Boolean   @default(true) // Mark as new until user views it
+
+  // Relations
+  page MonitoredPage @relation(fields: [pageId], references: [id], onDelete: Cascade)
+
+  @@unique([pageId, postId])
+  @@index([pageId])
+  @@index([discoveredAt])
+  @@index([isNew])
+  @@index([viralScore(sort: Desc)])
 }

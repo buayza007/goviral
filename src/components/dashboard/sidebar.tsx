@@ -7,6 +7,7 @@ import {
   LayoutDashboard,
   Search,
   FileText,
+  Eye,
   History,
   TrendingUp,
   Settings,
@@ -18,6 +19,7 @@ const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { name: "ค้นหา Viral (Keyword)", href: "/dashboard/search", icon: Search },
   { name: "ค้นหา Viral (เพจ)", href: "/dashboard/search-page", icon: FileText },
+  { name: "ติดตามเพจคู่แข่ง", href: "/dashboard/monitor", icon: Eye },
   { name: "ประวัติการค้นหา", href: "/dashboard/history", icon: History },
   { name: "เทรนด์", href: "/dashboard/trends", icon: TrendingUp },
 ];
