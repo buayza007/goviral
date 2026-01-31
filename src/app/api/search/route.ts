@@ -12,42 +12,64 @@ interface ViralPost {
   caption: string;
   imageUrl?: string;
   pageName?: string;
+  authorId?: string;
   metrics: {
     likes: number;
     comments: number;
     shares: number;
+    views: number;
   };
   score: number;
+  postedAt?: string;
 }
 
-interface ApifyFacebookPost {
+interface FacebookSearchResult {
+  // Post data
+  post_id?: string;
+  post_url?: string;
   url?: string;
-  postUrl?: string;
-  link?: string;
   text?: string;
-  message?: string;
-  caption?: string;
   content?: string;
-  postText?: string;
-  imageUrl?: string;
-  image?: string;
-  media?: { image?: string }[];
+  message?: string;
+  
+  // Author data
+  author_name?: string;
+  author_id?: string;
+  author_url?: string;
+  author_profile_picture?: string;
+  
+  // Media
+  image_url?: string;
+  images?: string[];
+  video_url?: string;
+  thumbnail_url?: string;
+  
+  // Engagement
   likes?: number;
-  likesCount?: number;
   reactions?: number;
-  reactionsCount?: number;
+  reaction_count?: number;
   comments?: number;
-  commentsCount?: number;
+  comment_count?: number;
   shares?: number;
-  sharesCount?: number;
-  timestamp?: number;
-  time?: string;
-  date?: string;
-  pageName?: string;
-  authorName?: string;
-  name?: string;
-  title?: string;
-  posts?: ApifyFacebookPost[];
+  share_count?: number;
+  views?: number;
+  view_count?: number;
+  
+  // Time
+  post_time?: string;
+  timestamp?: string;
+  created_time?: string;
+  
+  // Reaction breakdown
+  reaction_map?: {
+    like?: number;
+    love?: number;
+    haha?: number;
+    wow?: number;
+    sad?: number;
+    angry?: number;
+  };
+  
   [key: string]: unknown;
 }
 
@@ -56,60 +78,43 @@ interface ApifyFacebookPost {
 // ============================================
 
 function calculateViralScore(likes: number, comments: number, shares: number): number {
+  // Formula: (likes * 1) + (comments * 3) + (shares * 5)
   return (likes * 1) + (comments * 3) + (shares * 5);
 }
 
-function extractPostsFromPageData(pageData: ApifyFacebookPost[]): ApifyFacebookPost[] {
-  const allPosts: ApifyFacebookPost[] = [];
+function processSearchResults(items: FacebookSearchResult[]): ViralPost[] {
+  console.log(`Processing ${items.length} search results`);
   
-  for (const item of pageData) {
-    // If item has posts array (from page scraper)
-    if (item.posts && Array.isArray(item.posts)) {
-      allPosts.push(...item.posts);
-    }
-    // If item itself is a post
-    else if (item.url || item.postUrl || item.text || item.message || item.likes || item.reactions) {
-      allPosts.push(item);
-    }
-  }
-  
-  return allPosts;
-}
-
-function processApifyResults(items: ApifyFacebookPost[], pageName?: string): ViralPost[] {
-  console.log("Processing Apify results:", JSON.stringify(items, null, 2).substring(0, 2000));
-  
-  // Extract posts from page data
-  const posts = extractPostsFromPageData(items);
-  console.log(`Extracted ${posts.length} posts from page data`);
-
-  // Map - Transform raw data to clean object
-  const mapped: ViralPost[] = posts.map(item => {
-    const likes = Number(item.likes || item.likesCount || item.reactions || item.reactionsCount || 0);
-    const comments = Number(item.comments || item.commentsCount || 0);
-    const shares = Number(item.shares || item.sharesCount || 0);
+  const mapped: ViralPost[] = items.map(item => {
+    const likes = Number(item.likes || item.reactions || item.reaction_count || 0);
+    const comments = Number(item.comments || item.comment_count || 0);
+    const shares = Number(item.shares || item.share_count || 0);
+    const views = Number(item.views || item.view_count || 0);
     
-    // Get image URL
-    let imageUrl = item.imageUrl || item.image;
-    if (!imageUrl && item.media && Array.isArray(item.media) && item.media[0]?.image) {
-      imageUrl = item.media[0].image;
+    // Get image
+    let imageUrl = item.image_url || item.thumbnail_url;
+    if (!imageUrl && item.images && Array.isArray(item.images) && item.images[0]) {
+      imageUrl = item.images[0];
     }
 
-    const postUrl = item.url || item.postUrl || item.link || "";
-    const caption = item.text || item.message || item.caption || item.content || item.postText || "";
+    const postUrl = item.post_url || item.url || "";
+    const caption = item.text || item.content || item.message || "";
+    const postedAt = item.post_time || item.timestamp || item.created_time;
 
     return {
       facebookUrl: postUrl,
       caption,
       imageUrl,
-      pageName: item.pageName || item.authorName || item.name || item.title || pageName,
-      metrics: { likes, comments, shares },
+      pageName: item.author_name,
+      authorId: item.author_id,
+      metrics: { likes, comments, shares, views },
       score: calculateViralScore(likes, comments, shares),
+      postedAt,
     };
   });
 
-  // Filter out posts with no engagement
-  const filtered = mapped.filter(post => post.score > 0 || post.caption);
+  // Filter posts with some content
+  const filtered = mapped.filter(post => post.caption || post.imageUrl);
 
   // Sort by score descending
   filtered.sort((a, b) => b.score - a.score);
@@ -119,78 +124,95 @@ function processApifyResults(items: ApifyFacebookPost[], pageName?: string): Vir
 }
 
 // ============================================
-// APIFY FACEBOOK PAGE SCRAPER
+// FACEBOOK SEARCH SCRAPER (alien_force/facebook-search-scraper)
 // ============================================
 
-async function scrapeFacebookPage(
-  pageUrl: string,
-  apifyToken: string
+async function searchFacebookByKeyword(
+  keyword: string,
+  cookies: string,
+  apifyToken: string,
+  options: {
+    searchType?: "posts" | "pages" | "people";
+    resultsLimit?: number;
+    filterByRecent?: boolean;
+    since?: "1d" | "7d" | "30d";
+  } = {}
 ): Promise<ViralPost[]> {
   const client = new ApifyClient({ token: apifyToken });
-  const actorId = "apify/facebook-pages-scraper";
+  const actorId = "alien_force/facebook-search-scraper";
 
-  // Extract page name from URL for display
-  const pageNameMatch = pageUrl.match(/facebook\.com\/([^/?]+)/);
-  const pageName = pageNameMatch ? pageNameMatch[1] : "Facebook Page";
+  // Parse cookies string to array format
+  let cookiesArray: { name: string; value: string; domain: string }[] = [];
+  
+  try {
+    // Try parsing as JSON array first
+    if (cookies.trim().startsWith("[")) {
+      cookiesArray = JSON.parse(cookies);
+    } else {
+      // Parse cookie string format: name1=value1; name2=value2
+      cookiesArray = cookies.split(";").map(cookie => {
+        const [name, ...valueParts] = cookie.trim().split("=");
+        return {
+          name: name.trim(),
+          value: valueParts.join("=").trim(),
+          domain: ".facebook.com"
+        };
+      }).filter(c => c.name && c.value);
+    }
+  } catch (e) {
+    console.error("Failed to parse cookies:", e);
+    throw new Error("รูปแบบ Cookie ไม่ถูกต้อง - ใช้รูปแบบ: name1=value1; name2=value2");
+  }
+
+  if (cookiesArray.length === 0) {
+    throw new Error("ไม่พบ Cookie ที่ถูกต้อง");
+  }
 
   const input = {
-    startUrls: [{ url: pageUrl }],
-    maxPosts: 50,
-    maxPostComments: 0,
-    maxReviewComments: 0,
-    scrapeAbout: false,
-    scrapePosts: true,
-    scrapeServices: false,
-    scrapeReviews: false,
+    search_type: options.searchType || "posts",
+    keyword: keyword,
+    filter_by_recent_posts: options.filterByRecent ?? true,
+    results_limit: options.resultsLimit || 30,
+    min_wait_time_in_sec: 1,
+    max_wait_time_in_sec: 5,
+    cookies: cookiesArray,
+    fetch_reaction_map: true,
+    since: options.since || "7d",
   };
 
-  console.log(`=== APIFY REQUEST ===`);
-  console.log(`Page URL: ${pageUrl}`);
+  console.log(`=== FACEBOOK SEARCH REQUEST ===`);
+  console.log(`Keyword: ${keyword}`);
   console.log(`Actor: ${actorId}`);
-  console.log(`Input:`, JSON.stringify(input, null, 2));
+  console.log(`Search Type: ${input.search_type}`);
+  console.log(`Results Limit: ${input.results_limit}`);
+  console.log(`Cookies count: ${cookiesArray.length}`);
 
   const run = await client.actor(actorId).call(input, {
-    waitSecs: 120,
+    waitSecs: 180, // Wait up to 3 minutes
   });
 
-  console.log(`=== APIFY RESPONSE ===`);
+  console.log(`=== FACEBOOK SEARCH RESPONSE ===`);
   console.log(`Run ID: ${run.id}`);
   console.log(`Status: ${run.status}`);
-  console.log(`Dataset ID: ${run.defaultDatasetId}`);
 
   const { items } = await client.dataset(run.defaultDatasetId).listItems();
   
-  console.log(`Retrieved ${items.length} items from dataset`);
-  console.log(`Raw items:`, JSON.stringify(items, null, 2).substring(0, 3000));
+  console.log(`Retrieved ${items.length} items`);
+  
+  if (items.length > 0) {
+    console.log(`Sample item keys:`, Object.keys(items[0]));
+  }
 
   if (items.length === 0) {
-    throw new Error("ไม่พบข้อมูลจาก Facebook Page นี้ - อาจเป็น Page ที่ไม่เปิดสาธารณะ");
+    throw new Error("ไม่พบโพสต์จากคำค้นหานี้ - ลองเปลี่ยน keyword หรือตรวจสอบ Cookie");
   }
 
-  const viralPosts = processApifyResults(items as ApifyFacebookPost[], pageName);
-  
-  if (viralPosts.length === 0) {
-    throw new Error("ไม่พบโพสต์ที่มี engagement - ลองใช้ Page อื่น");
-  }
-
-  return viralPosts;
+  return processSearchResults(items as FacebookSearchResult[]);
 }
 
 // ============================================
 // HELPER FUNCTIONS
 // ============================================
-
-function formatFacebookUrl(input: string): string {
-  const trimmed = input.trim();
-  
-  // If already a full URL
-  if (trimmed.startsWith("http")) {
-    return trimmed;
-  }
-  
-  // If just a page name/username
-  return `https://www.facebook.com/${trimmed}`;
-}
 
 function toPlatformEnum(platform: string): Platform {
   const upperPlatform = platform.toUpperCase();
@@ -245,7 +267,9 @@ async function saveToDatabase(
           likesCount: post.metrics.likes,
           commentsCount: post.metrics.comments,
           sharesCount: post.metrics.shares,
+          viewsCount: post.metrics.views,
           engagementScore: post.score,
+          postedAt: post.postedAt ? new Date(post.postedAt) : null,
           metricsJson: post.metrics as object,
         },
       });
@@ -276,11 +300,26 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { keyword, platform = "FACEBOOK" } = body;
+    const { 
+      keyword, 
+      cookies,
+      platform = "FACEBOOK",
+      searchType = "posts",
+      since = "7d",
+      resultsLimit = 30,
+    } = body;
 
-    if (!keyword) {
+    // Validation
+    if (!keyword?.trim()) {
       return NextResponse.json(
-        { error: "กรุณาใส่ชื่อ Facebook Page หรือ URL" },
+        { error: "กรุณาใส่ keyword ที่ต้องการค้นหา" },
+        { status: 400 }
+      );
+    }
+
+    if (!cookies?.trim()) {
+      return NextResponse.json(
+        { error: "กรุณาใส่ Facebook Cookie เพื่อค้นหา" },
         { status: 400 }
       );
     }
@@ -296,14 +335,22 @@ export async function POST(request: NextRequest) {
 
     console.log(`=== NEW SEARCH REQUEST ===`);
     console.log(`Keyword: ${keyword}`);
-    console.log(`User: ${clerkId}`);
+    console.log(`Search Type: ${searchType}`);
+    console.log(`Since: ${since}`);
 
-    // Format URL
-    const pageUrl = formatFacebookUrl(keyword);
-    console.log(`Formatted URL: ${pageUrl}`);
+    // Search Facebook
+    const viralPosts = await searchFacebookByKeyword(
+      keyword,
+      cookies,
+      apifyToken,
+      {
+        searchType,
+        resultsLimit,
+        filterByRecent: true,
+        since,
+      }
+    );
 
-    // Scrape Facebook Page
-    const viralPosts = await scrapeFacebookPage(pageUrl, apifyToken);
     console.log(`Found ${viralPosts.length} viral posts`);
 
     // Save to database
@@ -319,11 +366,11 @@ export async function POST(request: NextRequest) {
       pageName: post.pageName,
       pageUrl: null,
       postType: "post",
-      postedAt: null,
+      postedAt: post.postedAt,
       likesCount: post.metrics.likes,
       commentsCount: post.metrics.comments,
       sharesCount: post.metrics.shares,
-      viewsCount: 0,
+      viewsCount: post.metrics.views,
       engagementScore: post.score,
       platform,
       rank: index + 1,
@@ -338,7 +385,8 @@ export async function POST(request: NextRequest) {
       status: "COMPLETED",
       resultCount: contents.length,
       contents,
-      isDemo: false,
+      keyword,
+      searchType,
       scoringFormula: "(likes × 1) + (comments × 3) + (shares × 5)",
     });
 
@@ -351,7 +399,6 @@ export async function POST(request: NextRequest) {
       { 
         error: "การค้นหาล้มเหลว", 
         message: errorMessage,
-        hint: "ตรวจสอบว่า Facebook Page เปิดสาธารณะและชื่อถูกต้อง"
       },
       { status: 500 }
     );
