@@ -101,14 +101,59 @@ export default function MonitorPage() {
     try {
       const res = await fetch("/api/monitor/pages");
       const data = await res.json();
-      if (data.pages) {
+      if (data.error) {
+        console.error("API Error:", data);
+        toast({ title: "Error", description: data.message || data.error, variant: "destructive" });
+      } else if (data.pages) {
         setPages(data.pages);
         setTotalNewPosts(data.newPosts || 0);
       }
     } catch (err) {
       console.error("Error fetching pages:", err);
+      toast({ title: "Error fetching pages", variant: "destructive" });
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Debug & Migration
+  const runDebug = async () => {
+    setDebugLoading(true);
+    try {
+      const res = await fetch("/api/monitor/pages?debug=true");
+      const data = await res.json();
+      setDebugData(data.debug || data);
+      setShowDebug(true);
+    } catch (err) {
+      setDebugData({ error: String(err) });
+      setShowDebug(true);
+    } finally {
+      setDebugLoading(false);
+    }
+  };
+
+  const runMigration = async () => {
+    setDebugLoading(true);
+    try {
+      const res = await fetch("/api/monitor/pages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ migrate: true }),
+      });
+      const data = await res.json();
+      toast({ 
+        title: data.success ? "✅ Migration สำเร็จ" : "❌ Migration ล้มเหลว",
+        description: data.message 
+      });
+      if (data.success) {
+        fetchPages();
+      }
+      setDebugData(data);
+      setShowDebug(true);
+    } catch (err) {
+      toast({ title: "Migration failed", variant: "destructive" });
+    } finally {
+      setDebugLoading(false);
     }
   };
 
@@ -281,13 +326,31 @@ export default function MonitorPage() {
             <p className="text-gray-400 mt-1">ติดตามโพสต์ใหม่จากเพจที่คุณสนใจ</p>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             {totalNewPosts > 0 && (
               <div className="flex items-center gap-2 px-3 py-1.5 bg-red-500/20 text-red-400 rounded-full text-sm font-medium">
                 <Bell className="w-4 h-4" />
                 {totalNewPosts} โพสต์ใหม่
               </div>
             )}
+            <button
+              onClick={runDebug}
+              disabled={debugLoading}
+              className="flex items-center gap-1 px-3 py-1.5 text-xs bg-amber-500/20 text-amber-400 rounded-lg hover:bg-amber-500/30 transition-colors"
+              title="Debug Database"
+            >
+              {debugLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Bug className="w-3 h-3" />}
+              Debug
+            </button>
+            <button
+              onClick={runMigration}
+              disabled={debugLoading}
+              className="flex items-center gap-1 px-3 py-1.5 text-xs bg-green-500/20 text-green-400 rounded-lg hover:bg-green-500/30 transition-colors"
+              title="Run Migration"
+            >
+              {debugLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+              Migrate DB
+            </button>
             <Button
               onClick={() => setShowAddForm(!showAddForm)}
               className="bg-gradient-to-r from-orange-500 to-pink-500 hover:from-orange-600 hover:to-pink-600"
