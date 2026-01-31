@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { ApifyClient } from "apify-client";
+import { Platform } from "@prisma/client";
 
 // ============================================
 // INTERFACES
@@ -190,19 +191,34 @@ async function searchFacebookViralContent(
 }
 
 // ============================================
+// HELPER: Convert string to Platform enum
+// ============================================
+
+function toPlatformEnum(platform: string): Platform {
+  const upperPlatform = platform.toUpperCase();
+  if (upperPlatform === "FACEBOOK") return Platform.FACEBOOK;
+  if (upperPlatform === "INSTAGRAM") return Platform.INSTAGRAM;
+  if (upperPlatform === "TIKTOK") return Platform.TIKTOK;
+  return Platform.FACEBOOK; // Default
+}
+
+// ============================================
 // DATABASE OPERATIONS (Optional - with error handling)
 // ============================================
 
 async function tryDatabaseOperations(
   clerkId: string,
   keyword: string,
-  platform: string,
+  platformStr: string,
   viralPosts: ViralPost[],
   isDemo: boolean
 ) {
   try {
     // Dynamic import to handle cases where database is not available
     const { default: prisma } = await import("@/lib/prisma");
+    
+    // Convert string to Platform enum
+    const platform = toPlatformEnum(platformStr);
 
     // Get or create user
     let user = await prisma.user.findUnique({ where: { clerkId } });
@@ -217,7 +233,7 @@ async function tryDatabaseOperations(
       data: {
         userId: user.id,
         keyword,
-        platform,
+        platform: platform,
         status: "COMPLETED",
         apifyRunId: isDemo ? "demo_mode" : `apify_${Date.now()}`,
         resultCount: viralPosts.length,
@@ -231,7 +247,7 @@ async function tryDatabaseOperations(
         data: {
           searchQueryId: searchQuery.id,
           externalId: `${searchQuery.id}_${i}_${Date.now()}`,
-          platform,
+          platform: platform,
           url: post.facebookUrl,
           caption: post.caption,
           imageUrl: post.imageUrl || null,
@@ -239,7 +255,7 @@ async function tryDatabaseOperations(
           commentsCount: post.metrics.comments,
           sharesCount: post.metrics.shares,
           engagementScore: post.score,
-          metricsJson: post.metrics as any,
+          metricsJson: post.metrics as object,
         },
       });
     }
