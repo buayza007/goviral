@@ -13,7 +13,6 @@ interface ViralPost {
   imageUrl?: string;
   videoUrl?: string;
   pageName?: string;
-  authorId?: string;
   metrics: {
     likes: number;
     comments: number;
@@ -24,121 +23,55 @@ interface ViralPost {
   postedAt?: string;
 }
 
-interface FacebookSearchResult {
-  // Different possible field names from Apify
-  post_id?: string;
-  postId?: string;
-  
-  post_url?: string;
-  postUrl?: string;
-  url?: string;
-  link?: string;
-  
-  text?: string;
-  content?: string;
-  message?: string;
-  post_text?: string;
-  
-  // Author
-  author_name?: string;
-  authorName?: string;
-  author?: string;
-  user_name?: string;
-  userName?: string;
-  page_name?: string;
-  pageName?: string;
-  
-  author_id?: string;
-  authorId?: string;
-  user_id?: string;
-  userId?: string;
-  
-  // Media - various possible field names
-  image_url?: string;
-  imageUrl?: string;
-  image?: string;
-  photo?: string;
-  picture?: string;
-  thumbnail?: string;
-  thumbnail_url?: string;
-  thumbnailUrl?: string;
-  media_url?: string;
-  mediaUrl?: string;
-  
-  images?: string[];
-  photos?: string[];
-  media?: string[] | { url?: string; image?: string }[];
-  
-  video_url?: string;
-  videoUrl?: string;
-  video?: string;
-  
-  // Engagement - various possible field names
-  likes?: number;
-  like_count?: number;
-  likeCount?: number;
-  likes_count?: number;
-  likesCount?: number;
-  reactions?: number;
-  reaction_count?: number;
-  reactionCount?: number;
-  reactions_count?: number;
-  reactionsCount?: number;
-  
-  comments?: number;
-  comment_count?: number;
-  commentCount?: number;
-  comments_count?: number;
-  commentsCount?: number;
-  
-  shares?: number;
-  share_count?: number;
-  shareCount?: number;
-  shares_count?: number;
-  sharesCount?: number;
-  
-  views?: number;
-  view_count?: number;
-  viewCount?: number;
-  views_count?: number;
-  viewsCount?: number;
-  video_views?: number;
-  videoViews?: number;
-  
-  // Time
-  post_time?: string;
-  postTime?: string;
-  timestamp?: string;
-  created_time?: string;
-  createdTime?: string;
-  date?: string;
-  time?: string;
-  
-  [key: string]: unknown;
-}
-
 // ============================================
-// VIRAL SCORING ALGORITHM
+// VIRAL SCORING
 // ============================================
 
 function calculateViralScore(likes: number, comments: number, shares: number): number {
   return (likes * 1) + (comments * 3) + (shares * 5);
 }
 
-function getNumber(item: FacebookSearchResult, ...keys: string[]): number {
-  for (const key of keys) {
-    const value = item[key];
+// ============================================
+// DATA EXTRACTION HELPERS
+// ============================================
+
+function extractNumber(obj: any, ...paths: string[]): number {
+  for (const path of paths) {
+    // Handle nested paths like "engagement.likes"
+    const parts = path.split(".");
+    let value: any = obj;
+    
+    for (const part of parts) {
+      if (value && typeof value === "object") {
+        value = value[part];
+      } else {
+        value = undefined;
+        break;
+      }
+    }
+    
     if (value !== undefined && value !== null) {
       const num = Number(value);
-      if (!isNaN(num)) return num;
+      if (!isNaN(num) && num > 0) return num;
     }
   }
   return 0;
 }
 
-function getString(item: FacebookSearchResult, ...keys: string[]): string {
-  for (const key of keys) {
-    const value = item[key];
+function extractString(obj: any, ...paths: string[]): string {
+  for (const path of paths) {
+    const parts = path.split(".");
+    let value: any = obj;
+    
+    for (const part of parts) {
+      if (value && typeof value === "object") {
+        value = value[part];
+      } else {
+        value = undefined;
+        break;
+      }
+    }
+    
     if (value && typeof value === "string") {
       return value;
     }
@@ -146,93 +79,136 @@ function getString(item: FacebookSearchResult, ...keys: string[]): string {
   return "";
 }
 
-function getImageUrl(item: FacebookSearchResult): string | undefined {
-  // Try direct image fields
-  const directImage = getString(item, 
-    "image_url", "imageUrl", "image", "photo", "picture", 
-    "thumbnail", "thumbnail_url", "thumbnailUrl", 
-    "media_url", "mediaUrl"
-  );
-  if (directImage) return directImage;
+function extractImage(obj: any): string | undefined {
+  // Direct fields
+  const directFields = [
+    "image_url", "imageUrl", "image", "photo", "picture",
+    "thumbnail", "thumbnail_url", "thumbnailUrl", "media_url", 
+    "mediaUrl", "img", "src", "photo_url", "photoUrl",
+    "post_image", "postImage", "attached_image", "attachedImage"
+  ];
   
-  // Try images array
-  if (item.images && Array.isArray(item.images) && item.images[0]) {
-    if (typeof item.images[0] === "string") return item.images[0];
-  }
-  
-  // Try photos array
-  if (item.photos && Array.isArray(item.photos) && item.photos[0]) {
-    if (typeof item.photos[0] === "string") return item.photos[0];
-  }
-  
-  // Try media array
-  if (item.media && Array.isArray(item.media) && item.media[0]) {
-    const firstMedia = item.media[0];
-    if (typeof firstMedia === "string") return firstMedia;
-    if (typeof firstMedia === "object" && firstMedia) {
-      return (firstMedia as any).url || (firstMedia as any).image;
+  for (const field of directFields) {
+    if (obj[field] && typeof obj[field] === "string" && obj[field].startsWith("http")) {
+      return obj[field];
     }
+  }
+  
+  // Arrays
+  const arrayFields = ["images", "photos", "media", "attachments", "attached_media"];
+  for (const field of arrayFields) {
+    const arr = obj[field];
+    if (Array.isArray(arr) && arr.length > 0) {
+      const first = arr[0];
+      if (typeof first === "string" && first.startsWith("http")) return first;
+      if (typeof first === "object" && first) {
+        const url = first.url || first.image || first.src || first.photo;
+        if (url && typeof url === "string") return url;
+      }
+    }
+  }
+  
+  // Nested media object
+  if (obj.media && typeof obj.media === "object" && !Array.isArray(obj.media)) {
+    const url = obj.media.url || obj.media.image || obj.media.src;
+    if (url && typeof url === "string") return url;
   }
   
   return undefined;
 }
 
-function processSearchResults(items: FacebookSearchResult[]): ViralPost[] {
-  console.log(`Processing ${items.length} search results`);
+function processSearchResults(items: any[]): ViralPost[] {
+  console.log(`\n=== PROCESSING ${items.length} ITEMS ===`);
   
-  // Log first item structure for debugging
+  // Log first item completely for debugging
   if (items.length > 0) {
-    console.log("Sample item structure:", JSON.stringify(items[0], null, 2));
+    console.log("\n📋 FIRST ITEM FULL STRUCTURE:");
+    console.log(JSON.stringify(items[0], null, 2));
+    console.log("\n📋 FIRST ITEM KEYS:", Object.keys(items[0]));
   }
   
   const mapped: ViralPost[] = items.map((item, index) => {
-    // Extract engagement numbers with multiple fallback field names
-    const likes = getNumber(item, 
-      "likes", "like_count", "likeCount", "likes_count", "likesCount",
-      "reactions", "reaction_count", "reactionCount", "reactions_count", "reactionsCount"
+    // LIKES - try many possible field names
+    const likes = extractNumber(item,
+      // Direct
+      "likes", "like", "likeCount", "likes_count", "likesCount", "like_count",
+      // Reactions (Facebook uses reactions instead of likes)
+      "reactions", "reaction", "reactionCount", "reactions_count", "reactionsCount", "reaction_count",
+      "total_reactions", "totalReactions",
+      // Nested
+      "engagement.likes", "engagement.reactions", "stats.likes", "stats.reactions",
+      "metrics.likes", "metrics.reactions",
+      // Other variations
+      "num_likes", "numLikes", "likes_total", "likesTotal"
     );
     
-    const comments = getNumber(item,
-      "comments", "comment_count", "commentCount", "comments_count", "commentsCount"
+    // COMMENTS
+    const comments = extractNumber(item,
+      "comments", "comment", "commentCount", "comments_count", "commentsCount", "comment_count",
+      "total_comments", "totalComments", "num_comments", "numComments",
+      "engagement.comments", "stats.comments", "metrics.comments",
+      "replies", "reply_count", "replyCount"
     );
     
-    const shares = getNumber(item,
-      "shares", "share_count", "shareCount", "shares_count", "sharesCount"
+    // SHARES  
+    const shares = extractNumber(item,
+      "shares", "share", "shareCount", "shares_count", "sharesCount", "share_count",
+      "total_shares", "totalShares", "num_shares", "numShares",
+      "engagement.shares", "stats.shares", "metrics.shares",
+      "reposts", "repost_count", "repostCount"
     );
     
-    const views = getNumber(item,
-      "views", "view_count", "viewCount", "views_count", "viewsCount",
-      "video_views", "videoViews"
+    // VIEWS
+    const views = extractNumber(item,
+      "views", "view", "viewCount", "views_count", "viewsCount", "view_count",
+      "total_views", "totalViews", "num_views", "numViews",
+      "video_views", "videoViews", "video_view_count",
+      "engagement.views", "stats.views", "metrics.views",
+      "play_count", "playCount", "plays"
     );
     
-    // Get URLs
-    const postUrl = getString(item, 
-      "post_url", "postUrl", "url", "link"
+    // URL
+    const postUrl = extractString(item,
+      "post_url", "postUrl", "url", "link", "href",
+      "facebook_url", "facebookUrl", "permalink"
     );
     
-    // Get caption/text
-    const caption = getString(item,
-      "text", "content", "message", "post_text"
+    // TEXT
+    const caption = extractString(item,
+      "text", "content", "message", "post_text", "postText",
+      "body", "description", "caption", "full_text", "fullText"
     );
     
-    // Get author name
-    const pageName = getString(item,
+    // AUTHOR
+    const pageName = extractString(item,
       "author_name", "authorName", "author", "user_name", "userName",
-      "page_name", "pageName"
+      "page_name", "pageName", "name", "from_name", "fromName",
+      "poster_name", "posterName", "owner_name", "ownerName"
     );
     
-    // Get image
-    const imageUrl = getImageUrl(item);
+    // IMAGE
+    const imageUrl = extractImage(item);
     
-    // Get video
-    const videoUrl = getString(item, "video_url", "videoUrl", "video");
+    // VIDEO
+    const videoUrl = extractString(item,
+      "video_url", "videoUrl", "video", "video_src", "videoSrc"
+    );
     
-    // Get posted time
-    const postedAt = getString(item,
-      "post_time", "postTime", "timestamp", "created_time", "createdTime", "date", "time"
+    // TIME
+    const postedAt = extractString(item,
+      "post_time", "postTime", "timestamp", "created_time", "createdTime",
+      "date", "time", "published_at", "publishedAt", "created_at", "createdAt"
     );
 
-    const post: ViralPost = {
+    // Log each item's extracted data
+    if (index < 3) {
+      console.log(`\n📊 Item ${index + 1} extracted data:`);
+      console.log(`   Likes: ${likes} | Comments: ${comments} | Shares: ${shares} | Views: ${views}`);
+      console.log(`   Has Image: ${!!imageUrl} | Has Video: ${!!videoUrl}`);
+      console.log(`   Caption: ${caption.substring(0, 50)}...`);
+    }
+
+    return {
       facebookUrl: postUrl,
       caption,
       imageUrl,
@@ -242,30 +218,16 @@ function processSearchResults(items: FacebookSearchResult[]): ViralPost[] {
       score: calculateViralScore(likes, comments, shares),
       postedAt,
     };
-    
-    // Log each post's data for debugging
-    console.log(`Post ${index + 1}:`, {
-      likes,
-      comments, 
-      shares,
-      views,
-      hasImage: !!imageUrl,
-      hasVideo: !!videoUrl,
-      score: post.score,
-    });
-    
-    return post;
   });
 
-  // Sort by score descending
+  // Sort by score
   mapped.sort((a, b) => b.score - a.score);
 
-  // Return Top 5
   return mapped.slice(0, 5);
 }
 
 // ============================================
-// FACEBOOK SEARCH SCRAPER
+// FACEBOOK SEARCH
 // ============================================
 
 async function searchFacebookByKeyword(
@@ -275,7 +237,6 @@ async function searchFacebookByKeyword(
   options: {
     searchType?: "posts" | "pages" | "people";
     resultsLimit?: number;
-    filterByRecent?: boolean;
     since?: "1d" | "7d" | "30d";
   } = {}
 ): Promise<ViralPost[]> {
@@ -299,7 +260,6 @@ async function searchFacebookByKeyword(
       }).filter(c => c.name && c.value);
     }
   } catch (e) {
-    console.error("Failed to parse cookies:", e);
     throw new Error("รูปแบบ Cookie ไม่ถูกต้อง");
   }
 
@@ -310,7 +270,7 @@ async function searchFacebookByKeyword(
   const input = {
     search_type: options.searchType || "posts",
     keyword: keyword,
-    filter_by_recent_posts: options.filterByRecent ?? true,
+    filter_by_recent_posts: true,
     results_limit: options.resultsLimit || 30,
     min_wait_time_in_sec: 1,
     max_wait_time_in_sec: 5,
@@ -319,25 +279,21 @@ async function searchFacebookByKeyword(
     since: options.since || "7d",
   };
 
-  console.log(`=== FACEBOOK SEARCH ===`);
+  console.log(`\n=== FACEBOOK SEARCH REQUEST ===`);
   console.log(`Keyword: ${keyword}`);
-  console.log(`Cookies count: ${cookiesArray.length}`);
+  console.log(`Cookies: ${cookiesArray.length} cookies`);
 
-  const run = await client.actor(actorId).call(input, {
-    waitSecs: 180,
-  });
-
+  const run = await client.actor(actorId).call(input, { waitSecs: 180 });
   console.log(`Run status: ${run.status}`);
 
   const { items } = await client.dataset(run.defaultDatasetId).listItems();
-  
-  console.log(`Retrieved ${items.length} items`);
+  console.log(`Retrieved ${items.length} items from Apify`);
 
   if (items.length === 0) {
     throw new Error("ไม่พบโพสต์จากคำค้นหานี้");
   }
 
-  return processSearchResults(items as FacebookSearchResult[]);
+  return processSearchResults(items as any[]);
 }
 
 // ============================================
@@ -421,55 +377,31 @@ async function saveToDatabase(
 export async function POST(request: NextRequest) {
   try {
     const { userId: clerkId } = await auth();
-
     if (!clerkId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const body = await request.json();
-    const { 
-      keyword, 
-      cookies,
-      platform = "FACEBOOK",
-      searchType = "posts",
-      since = "7d",
-      resultsLimit = 30,
-    } = body;
+    const { keyword, cookies, platform = "FACEBOOK", searchType = "posts", since = "7d", resultsLimit = 30 } = body;
 
     if (!keyword?.trim()) {
-      return NextResponse.json(
-        { error: "กรุณาใส่ keyword" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "กรุณาใส่ keyword" }, { status: 400 });
     }
-
     if (!cookies?.trim()) {
-      return NextResponse.json(
-        { error: "กรุณาใส่ Facebook Cookie" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "กรุณาใส่ Facebook Cookie" }, { status: 400 });
     }
 
     const apifyToken = process.env.APIFY_API_TOKEN;
     if (!apifyToken) {
-      return NextResponse.json(
-        { error: "APIFY_API_TOKEN not configured" },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: "APIFY_API_TOKEN not configured" }, { status: 500 });
     }
 
-    // Search
-    const viralPosts = await searchFacebookByKeyword(
-      keyword,
-      cookies,
-      apifyToken,
-      { searchType, resultsLimit, filterByRecent: true, since }
-    );
+    const viralPosts = await searchFacebookByKeyword(keyword, cookies, apifyToken, { 
+      searchType, resultsLimit, since 
+    });
 
-    // Save
     const dbResult = await saveToDatabase(clerkId, keyword, platform, viralPosts);
 
-    // Response
     const contents = viralPosts.map((post, index) => ({
       id: `${dbResult.queryId}_${index}`,
       externalId: `post_${index}`,
@@ -478,20 +410,22 @@ export async function POST(request: NextRequest) {
       imageUrl: post.imageUrl || null,
       videoUrl: post.videoUrl || null,
       pageName: post.pageName || null,
-      pageUrl: null,
-      postType: post.videoUrl ? "video" : "post",
       postedAt: post.postedAt || null,
       likesCount: post.metrics.likes,
       commentsCount: post.metrics.comments,
       sharesCount: post.metrics.shares,
       viewsCount: post.metrics.views,
       engagementScore: post.score,
+      viralScore: post.score,
       platform,
       rank: index + 1,
-      viralScore: post.score,
     }));
 
-    console.log("Returning contents:", JSON.stringify(contents, null, 2));
+    // Log final output
+    console.log("\n=== FINAL OUTPUT ===");
+    contents.forEach((c, i) => {
+      console.log(`Post ${i+1}: Likes=${c.likesCount}, Comments=${c.commentsCount}, Shares=${c.sharesCount}, Score=${c.viralScore}`);
+    });
 
     return NextResponse.json({
       message: "Search completed",
@@ -500,18 +434,14 @@ export async function POST(request: NextRequest) {
       resultCount: contents.length,
       contents,
       keyword,
-      searchType,
       scoringFormula: "(likes × 1) + (comments × 3) + (shares × 5)",
     });
 
   } catch (error) {
     console.error("Search error:", error);
-    return NextResponse.json(
-      { 
-        error: "การค้นหาล้มเหลว", 
-        message: error instanceof Error ? error.message : "Unknown error",
-      },
-      { status: 500 }
-    );
+    return NextResponse.json({ 
+      error: "การค้นหาล้มเหลว", 
+      message: error instanceof Error ? error.message : "Unknown error" 
+    }, { status: 500 });
   }
 }
