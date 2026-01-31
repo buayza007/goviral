@@ -184,7 +184,7 @@ async function searchFacebookByKeyword(
     throw new Error("ไม่พบโพสต์จากคำค้นหานี้");
   }
 
-  return processSearchResults(items as ApifyFacebookPost[]);
+  return processSearchResults(items as unknown as ApifyFacebookPost[]);
 }
 
 // ============================================
