@@ -4,15 +4,46 @@ import { ApifyClient } from "apify-client";
 import { Platform } from "@prisma/client";
 
 // ============================================
-// INTERFACES
+// INTERFACES - Based on actual Apify response
 // ============================================
+
+interface ApifyFacebookPost {
+  post_id: string;
+  post_url: string;
+  text: string;
+  create_time: number;
+  
+  // Engagement - exact field names from Apify
+  like_count: number;
+  comment_count: number;
+  share_count: number;
+  view_count: number;
+  play_count: number;
+  
+  // Media
+  image_list: string[];
+  video_list: string[];
+  video_cover_image: string[];
+  
+  // Author
+  author_username: string;
+  author_user_id: string;
+  author_profile_url: string;
+  author_avatar: string;
+  
+  // Reactions
+  reaction_map: { name: string; count: number }[];
+  
+  type: string;
+}
 
 interface ViralPost {
   facebookUrl: string;
   caption: string;
   imageUrl?: string;
   videoUrl?: string;
-  pageName?: string;
+  authorName?: string;
+  authorAvatar?: string;
   metrics: {
     likes: number;
     comments: number;
@@ -32,197 +63,63 @@ function calculateViralScore(likes: number, comments: number, shares: number): n
 }
 
 // ============================================
-// DATA EXTRACTION HELPERS
+// PROCESS APIFY RESULTS
 // ============================================
 
-function extractNumber(obj: any, ...paths: string[]): number {
-  for (const path of paths) {
-    // Handle nested paths like "engagement.likes"
-    const parts = path.split(".");
-    let value: any = obj;
-    
-    for (const part of parts) {
-      if (value && typeof value === "object") {
-        value = value[part];
-      } else {
-        value = undefined;
-        break;
-      }
-    }
-    
-    if (value !== undefined && value !== null) {
-      const num = Number(value);
-      if (!isNaN(num) && num > 0) return num;
-    }
-  }
-  return 0;
-}
-
-function extractString(obj: any, ...paths: string[]): string {
-  for (const path of paths) {
-    const parts = path.split(".");
-    let value: any = obj;
-    
-    for (const part of parts) {
-      if (value && typeof value === "object") {
-        value = value[part];
-      } else {
-        value = undefined;
-        break;
-      }
-    }
-    
-    if (value && typeof value === "string") {
-      return value;
-    }
-  }
-  return "";
-}
-
-function extractImage(obj: any): string | undefined {
-  // Direct fields
-  const directFields = [
-    "image_url", "imageUrl", "image", "photo", "picture",
-    "thumbnail", "thumbnail_url", "thumbnailUrl", "media_url", 
-    "mediaUrl", "img", "src", "photo_url", "photoUrl",
-    "post_image", "postImage", "attached_image", "attachedImage"
-  ];
-  
-  for (const field of directFields) {
-    if (obj[field] && typeof obj[field] === "string" && obj[field].startsWith("http")) {
-      return obj[field];
-    }
-  }
-  
-  // Arrays
-  const arrayFields = ["images", "photos", "media", "attachments", "attached_media"];
-  for (const field of arrayFields) {
-    const arr = obj[field];
-    if (Array.isArray(arr) && arr.length > 0) {
-      const first = arr[0];
-      if (typeof first === "string" && first.startsWith("http")) return first;
-      if (typeof first === "object" && first) {
-        const url = first.url || first.image || first.src || first.photo;
-        if (url && typeof url === "string") return url;
-      }
-    }
-  }
-  
-  // Nested media object
-  if (obj.media && typeof obj.media === "object" && !Array.isArray(obj.media)) {
-    const url = obj.media.url || obj.media.image || obj.media.src;
-    if (url && typeof url === "string") return url;
-  }
-  
-  return undefined;
-}
-
-function processSearchResults(items: any[]): ViralPost[] {
-  console.log(`\n=== PROCESSING ${items.length} ITEMS ===`);
-  
-  // Log first item completely for debugging
-  if (items.length > 0) {
-    console.log("\n📋 FIRST ITEM FULL STRUCTURE:");
-    console.log(JSON.stringify(items[0], null, 2));
-    console.log("\n📋 FIRST ITEM KEYS:", Object.keys(items[0]));
-  }
+function processSearchResults(items: ApifyFacebookPost[]): ViralPost[] {
+  console.log(`Processing ${items.length} items from Apify`);
   
   const mapped: ViralPost[] = items.map((item, index) => {
-    // LIKES - try many possible field names
-    const likes = extractNumber(item,
-      // Direct
-      "likes", "like", "likeCount", "likes_count", "likesCount", "like_count",
-      // Reactions (Facebook uses reactions instead of likes)
-      "reactions", "reaction", "reactionCount", "reactions_count", "reactionsCount", "reaction_count",
-      "total_reactions", "totalReactions",
-      // Nested
-      "engagement.likes", "engagement.reactions", "stats.likes", "stats.reactions",
-      "metrics.likes", "metrics.reactions",
-      // Other variations
-      "num_likes", "numLikes", "likes_total", "likesTotal"
-    );
+    // Extract engagement using exact field names
+    const likes = Number(item.like_count) || 0;
+    const comments = Number(item.comment_count) || 0;
+    const shares = Number(item.share_count) || 0;
+    const views = Number(item.view_count) || Number(item.play_count) || 0;
     
-    // COMMENTS
-    const comments = extractNumber(item,
-      "comments", "comment", "commentCount", "comments_count", "commentsCount", "comment_count",
-      "total_comments", "totalComments", "num_comments", "numComments",
-      "engagement.comments", "stats.comments", "metrics.comments",
-      "replies", "reply_count", "replyCount"
-    );
+    // Get first image from image_list array
+    let imageUrl: string | undefined;
+    if (item.image_list && Array.isArray(item.image_list) && item.image_list.length > 0) {
+      imageUrl = item.image_list[0];
+    }
     
-    // SHARES  
-    const shares = extractNumber(item,
-      "shares", "share", "shareCount", "shares_count", "sharesCount", "share_count",
-      "total_shares", "totalShares", "num_shares", "numShares",
-      "engagement.shares", "stats.shares", "metrics.shares",
-      "reposts", "repost_count", "repostCount"
-    );
+    // Get video if available
+    let videoUrl: string | undefined;
+    if (item.video_list && Array.isArray(item.video_list) && item.video_list.length > 0) {
+      videoUrl = item.video_list[0];
+    }
+    // Use video cover as image if no image
+    if (!imageUrl && item.video_cover_image && Array.isArray(item.video_cover_image) && item.video_cover_image.length > 0) {
+      imageUrl = item.video_cover_image[0];
+    }
     
-    // VIEWS
-    const views = extractNumber(item,
-      "views", "view", "viewCount", "views_count", "viewsCount", "view_count",
-      "total_views", "totalViews", "num_views", "numViews",
-      "video_views", "videoViews", "video_view_count",
-      "engagement.views", "stats.views", "metrics.views",
-      "play_count", "playCount", "plays"
-    );
-    
-    // URL
-    const postUrl = extractString(item,
-      "post_url", "postUrl", "url", "link", "href",
-      "facebook_url", "facebookUrl", "permalink"
-    );
-    
-    // TEXT
-    const caption = extractString(item,
-      "text", "content", "message", "post_text", "postText",
-      "body", "description", "caption", "full_text", "fullText"
-    );
-    
-    // AUTHOR
-    const pageName = extractString(item,
-      "author_name", "authorName", "author", "user_name", "userName",
-      "page_name", "pageName", "name", "from_name", "fromName",
-      "poster_name", "posterName", "owner_name", "ownerName"
-    );
-    
-    // IMAGE
-    const imageUrl = extractImage(item);
-    
-    // VIDEO
-    const videoUrl = extractString(item,
-      "video_url", "videoUrl", "video", "video_src", "videoSrc"
-    );
-    
-    // TIME
-    const postedAt = extractString(item,
-      "post_time", "postTime", "timestamp", "created_time", "createdTime",
-      "date", "time", "published_at", "publishedAt", "created_at", "createdAt"
-    );
-
-    // Log each item's extracted data
-    if (index < 3) {
-      console.log(`\n📊 Item ${index + 1} extracted data:`);
-      console.log(`   Likes: ${likes} | Comments: ${comments} | Shares: ${shares} | Views: ${views}`);
-      console.log(`   Has Image: ${!!imageUrl} | Has Video: ${!!videoUrl}`);
-      console.log(`   Caption: ${caption.substring(0, 50)}...`);
+    // Format posted time
+    let postedAt: string | undefined;
+    if (item.create_time) {
+      postedAt = new Date(item.create_time).toISOString();
     }
 
-    return {
-      facebookUrl: postUrl,
-      caption,
+    const post: ViralPost = {
+      facebookUrl: item.post_url || "",
+      caption: item.text || "",
       imageUrl,
       videoUrl,
-      pageName,
+      authorName: item.author_username || undefined,
+      authorAvatar: item.author_avatar || undefined,
       metrics: { likes, comments, shares, views },
       score: calculateViralScore(likes, comments, shares),
       postedAt,
     };
+
+    // Debug log
+    console.log(`Post ${index + 1}: likes=${likes}, comments=${comments}, shares=${shares}, score=${post.score}, hasImage=${!!imageUrl}`);
+
+    return post;
   });
 
-  // Sort by score
+  // Sort by viral score (highest first)
   mapped.sort((a, b) => b.score - a.score);
 
+  // Return top 5
   return mapped.slice(0, 5);
 }
 
@@ -234,11 +131,7 @@ async function searchFacebookByKeyword(
   keyword: string,
   cookies: string,
   apifyToken: string,
-  options: {
-    searchType?: "posts" | "pages" | "people";
-    resultsLimit?: number;
-    since?: "1d" | "7d" | "30d";
-  } = {}
+  options: { since?: "1d" | "7d" | "30d"; resultsLimit?: number } = {}
 ): Promise<ViralPost[]> {
   const client = new ApifyClient({ token: apifyToken });
   const actorId = "alien_force/facebook-search-scraper";
@@ -268,7 +161,7 @@ async function searchFacebookByKeyword(
   }
 
   const input = {
-    search_type: options.searchType || "posts",
+    search_type: "posts",
     keyword: keyword,
     filter_by_recent_posts: true,
     results_limit: options.resultsLimit || 30,
@@ -279,21 +172,19 @@ async function searchFacebookByKeyword(
     since: options.since || "7d",
   };
 
-  console.log(`\n=== FACEBOOK SEARCH REQUEST ===`);
-  console.log(`Keyword: ${keyword}`);
-  console.log(`Cookies: ${cookiesArray.length} cookies`);
+  console.log(`Searching Facebook for: "${keyword}"`);
 
   const run = await client.actor(actorId).call(input, { waitSecs: 180 });
-  console.log(`Run status: ${run.status}`);
+  console.log(`Apify run status: ${run.status}`);
 
   const { items } = await client.dataset(run.defaultDatasetId).listItems();
-  console.log(`Retrieved ${items.length} items from Apify`);
+  console.log(`Got ${items.length} items from Apify`);
 
   if (items.length === 0) {
     throw new Error("ไม่พบโพสต์จากคำค้นหานี้");
   }
 
-  return processSearchResults(items as any[]);
+  return processSearchResults(items as ApifyFacebookPost[]);
 }
 
 // ============================================
@@ -346,7 +237,7 @@ async function saveToDatabase(
           caption: post.caption,
           imageUrl: post.imageUrl || null,
           videoUrl: post.videoUrl || null,
-          pageName: post.pageName || null,
+          pageName: post.authorName || null,
           likesCount: post.metrics.likes,
           commentsCount: post.metrics.comments,
           sharesCount: post.metrics.shares,
@@ -382,7 +273,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { keyword, cookies, platform = "FACEBOOK", searchType = "posts", since = "7d", resultsLimit = 30 } = body;
+    const { keyword, cookies, platform = "FACEBOOK", since = "7d", resultsLimit = 30 } = body;
 
     if (!keyword?.trim()) {
       return NextResponse.json({ error: "กรุณาใส่ keyword" }, { status: 400 });
@@ -396,12 +287,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "APIFY_API_TOKEN not configured" }, { status: 500 });
     }
 
-    const viralPosts = await searchFacebookByKeyword(keyword, cookies, apifyToken, { 
-      searchType, resultsLimit, since 
-    });
-
+    const viralPosts = await searchFacebookByKeyword(keyword, cookies, apifyToken, { since, resultsLimit });
     const dbResult = await saveToDatabase(clerkId, keyword, platform, viralPosts);
 
+    // Build response
     const contents = viralPosts.map((post, index) => ({
       id: `${dbResult.queryId}_${index}`,
       externalId: `post_${index}`,
@@ -409,7 +298,8 @@ export async function POST(request: NextRequest) {
       caption: post.caption,
       imageUrl: post.imageUrl || null,
       videoUrl: post.videoUrl || null,
-      pageName: post.pageName || null,
+      pageName: post.authorName || null,
+      authorAvatar: post.authorAvatar || null,
       postedAt: post.postedAt || null,
       likesCount: post.metrics.likes,
       commentsCount: post.metrics.comments,
@@ -421,10 +311,9 @@ export async function POST(request: NextRequest) {
       rank: index + 1,
     }));
 
-    // Log final output
-    console.log("\n=== FINAL OUTPUT ===");
+    console.log("=== FINAL RESPONSE ===");
     contents.forEach((c, i) => {
-      console.log(`Post ${i+1}: Likes=${c.likesCount}, Comments=${c.commentsCount}, Shares=${c.sharesCount}, Score=${c.viralScore}`);
+      console.log(`#${i+1}: Likes=${c.likesCount}, Comments=${c.commentsCount}, Shares=${c.sharesCount}, Image=${!!c.imageUrl}`);
     });
 
     return NextResponse.json({

@@ -14,6 +14,7 @@ interface ContentItem {
   imageUrl: string | null;
   videoUrl: string | null;
   pageName: string | null;
+  authorAvatar: string | null;
   postedAt: string | null;
   likesCount: number;
   commentsCount: number;
@@ -21,7 +22,6 @@ interface ContentItem {
   viewsCount: number;
   viralScore: number;
   rank: number;
-  postType?: string;
 }
 
 interface SearchResult {
@@ -33,25 +33,25 @@ interface SearchResult {
   scoringFormula?: string;
 }
 
-function getRankStyle(rank: number) {
-  if (rank === 1) return { bg: "from-yellow-500 to-amber-600", icon: "🥇" };
+function getRankBadge(rank: number) {
+  if (rank === 1) return { bg: "from-yellow-400 to-amber-500", icon: "🥇" };
   if (rank === 2) return { bg: "from-gray-300 to-gray-400", icon: "🥈" };
-  if (rank === 3) return { bg: "from-amber-600 to-orange-700", icon: "🥉" };
-  return { bg: "from-slate-600 to-slate-700", icon: `#${rank}` };
+  if (rank === 3) return { bg: "from-amber-500 to-orange-600", icon: "🥉" };
+  return { bg: "from-slate-500 to-slate-600", icon: `#${rank}` };
 }
 
 function getScoreLevel(score: number) {
-  if (score >= 100000) return { label: "MEGA VIRAL", color: "text-yellow-400", emoji: "🔥" };
-  if (score >= 50000) return { label: "SUPER VIRAL", color: "text-orange-400", emoji: "🚀" };
-  if (score >= 10000) return { label: "VIRAL", color: "text-pink-400", emoji: "⚡" };
-  if (score >= 1000) return { label: "TRENDING", color: "text-green-400", emoji: "📈" };
-  return { label: "NEW", color: "text-blue-400", emoji: "✨" };
+  if (score >= 100) return { emoji: "🔥", color: "text-orange-400" };
+  if (score >= 50) return { emoji: "⚡", color: "text-yellow-400" };
+  if (score >= 20) return { emoji: "📈", color: "text-green-400" };
+  return { emoji: "✨", color: "text-blue-400" };
 }
 
 function PostCard({ content }: { content: ContentItem }) {
-  const rankStyle = getRankStyle(content.rank);
+  const rank = getRankBadge(content.rank);
   const scoreLevel = getScoreLevel(content.viralScore);
-  const hasMedia = content.imageUrl || content.videoUrl;
+  const hasImage = !!content.imageUrl;
+  const hasVideo = !!content.videoUrl;
   
   return (
     <motion.div
@@ -59,68 +59,56 @@ function PostCard({ content }: { content: ContentItem }) {
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: (content.rank - 1) * 0.1 }}
     >
-      <Card className="overflow-hidden bg-slate-800/50 border-slate-700 hover:border-purple-500/50 transition-all group hover:shadow-xl hover:shadow-purple-500/10 h-full flex flex-col">
-        {/* Media Section */}
-        <div className="relative aspect-video bg-slate-900 overflow-hidden">
-          {content.videoUrl ? (
-            // Video thumbnail with play icon
+      <Card className="overflow-hidden bg-slate-800/50 border-slate-700 hover:border-purple-500/50 transition-all group hover:shadow-xl h-full flex flex-col">
+        {/* Media */}
+        <div className="relative aspect-video bg-slate-900">
+          {hasVideo && content.imageUrl ? (
             <div className="relative w-full h-full">
-              {content.imageUrl ? (
-                <img
-                  src={content.imageUrl}
-                  alt="Video thumbnail"
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                  onError={(e) => {
-                    (e.target as HTMLImageElement).style.display = 'none';
-                  }}
-                />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-purple-900 to-slate-900">
-                  <Play className="w-12 h-12 text-white/50" />
-                </div>
-              )}
-              <div className="absolute inset-0 flex items-center justify-center bg-black/30">
-                <div className="w-14 h-14 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center">
+              <img
+                src={content.imageUrl}
+                alt="Video thumbnail"
+                className="w-full h-full object-cover"
+                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+              />
+              <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+                <div className="w-14 h-14 rounded-full bg-white/20 backdrop-blur flex items-center justify-center">
                   <Play className="w-8 h-8 text-white fill-white" />
                 </div>
               </div>
             </div>
-          ) : content.imageUrl ? (
-            // Image
+          ) : hasImage ? (
             <img
-              src={content.imageUrl}
-              alt={content.caption || "Post image"}
+              src={content.imageUrl!}
+              alt="Post"
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-              onError={(e) => {
-                (e.target as HTMLImageElement).src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300"><rect fill="%231e293b" width="400" height="300"/><text x="50%" y="50%" text-anchor="middle" dy=".3em" fill="%2364748b" font-size="48">📱</text></svg>';
+              onError={(e) => { 
+                (e.target as HTMLImageElement).src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect fill="%231e293b" width="100" height="100"/><text x="50" y="55" text-anchor="middle" fill="%234b5563" font-size="30">📱</text></svg>';
               }}
             />
           ) : (
-            // No media placeholder
             <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-slate-800 to-slate-900">
               <span className="text-5xl">📝</span>
             </div>
           )}
           
           {/* Rank Badge */}
-          <div className="absolute top-2 left-2 z-10">
-            <div className={`px-2.5 py-1 rounded-full bg-gradient-to-r ${rankStyle.bg} text-white text-xs font-bold shadow-lg`}>
-              {rankStyle.icon}
+          <div className="absolute top-2 left-2">
+            <div className={`px-2.5 py-1 rounded-full bg-gradient-to-r ${rank.bg} text-white text-xs font-bold shadow-lg`}>
+              {rank.icon}
             </div>
           </div>
 
           {/* Score Badge */}
-          <div className="absolute top-2 right-2 z-10">
-            <div className="px-2.5 py-1 rounded-full bg-black/80 backdrop-blur-sm text-xs font-bold flex items-center gap-1">
+          <div className="absolute top-2 right-2">
+            <div className="px-2.5 py-1 rounded-full bg-black/70 backdrop-blur text-xs font-bold flex items-center gap-1">
               <span>{scoreLevel.emoji}</span>
               <span className={scoreLevel.color}>{formatNumber(content.viralScore)}</span>
             </div>
           </div>
 
-          {/* Video badge */}
-          {content.videoUrl && (
-            <div className="absolute bottom-2 left-2 z-10">
-              <div className="px-2 py-1 rounded bg-red-500/90 text-white text-xs font-bold flex items-center gap-1">
+          {hasVideo && (
+            <div className="absolute bottom-2 left-2">
+              <div className="px-2 py-1 rounded bg-red-500 text-white text-xs font-bold flex items-center gap-1">
                 <Play className="w-3 h-3" /> VIDEO
               </div>
             </div>
@@ -131,9 +119,17 @@ function PostCard({ content }: { content: ContentItem }) {
         <div className="p-4 flex-1 flex flex-col">
           {/* Author */}
           {content.pageName && (
-            <p className="text-xs text-blue-400 font-medium mb-2 truncate">
-              👤 {content.pageName}
-            </p>
+            <div className="flex items-center gap-2 mb-2">
+              {content.authorAvatar && (
+                <img 
+                  src={content.authorAvatar} 
+                  alt={content.pageName}
+                  className="w-6 h-6 rounded-full object-cover"
+                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                />
+              )}
+              <span className="text-xs text-blue-400 font-medium truncate">{content.pageName}</span>
+            </div>
           )}
 
           {/* Caption */}
@@ -141,39 +137,39 @@ function PostCard({ content }: { content: ContentItem }) {
             {content.caption || "ไม่มีข้อความ"}
           </p>
 
-          {/* Stats Grid */}
+          {/* Stats */}
           <div className="grid grid-cols-4 gap-1 mt-4 pt-3 border-t border-slate-700">
             <div className="text-center">
               <div className="flex items-center justify-center gap-1">
                 <Heart className="w-3 h-3 text-pink-400" />
                 <span className="text-sm font-bold text-pink-400">{formatNumber(content.likesCount)}</span>
               </div>
-              <p className="text-[9px] text-gray-500 mt-0.5">Likes</p>
+              <p className="text-[9px] text-gray-500">Likes</p>
             </div>
             <div className="text-center">
               <div className="flex items-center justify-center gap-1">
                 <MessageCircle className="w-3 h-3 text-blue-400" />
                 <span className="text-sm font-bold text-blue-400">{formatNumber(content.commentsCount)}</span>
               </div>
-              <p className="text-[9px] text-gray-500 mt-0.5">Comments</p>
+              <p className="text-[9px] text-gray-500">Comments</p>
             </div>
             <div className="text-center">
               <div className="flex items-center justify-center gap-1">
                 <Share2 className="w-3 h-3 text-green-400" />
                 <span className="text-sm font-bold text-green-400">{formatNumber(content.sharesCount)}</span>
               </div>
-              <p className="text-[9px] text-gray-500 mt-0.5">Shares</p>
+              <p className="text-[9px] text-gray-500">Shares</p>
             </div>
             <div className="text-center">
               <div className="flex items-center justify-center gap-1">
                 <Eye className="w-3 h-3 text-purple-400" />
                 <span className="text-sm font-bold text-purple-400">{formatNumber(content.viewsCount)}</span>
               </div>
-              <p className="text-[9px] text-gray-500 mt-0.5">Views</p>
+              <p className="text-[9px] text-gray-500">Views</p>
             </div>
           </div>
 
-          {/* View Post Button */}
+          {/* View Post */}
           {content.url && (
             <a
               href={content.url}
@@ -194,11 +190,6 @@ function PostCard({ content }: { content: ContentItem }) {
 export default function SearchPage() {
   const [searchResult, setSearchResult] = useState<SearchResult | null>(null);
 
-  const handleSearchComplete = (result: SearchResult) => {
-    console.log("Search result received:", result);
-    setSearchResult(result);
-  };
-
   const totalStats = searchResult?.contents.reduce(
     (acc, c) => ({
       likes: acc.likes + (c.likesCount || 0),
@@ -214,48 +205,31 @@ export default function SearchPage() {
     <div className="min-h-screen">
       <div className="max-w-7xl mx-auto space-y-8 px-4">
         {/* Header */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="text-center pt-4"
-        >
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="text-center pt-4">
           <h1 className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
             Facebook Viral Search
           </h1>
-          <p className="text-gray-400 mt-2">
-            ค้นหาโพสต์ที่มี Engagement สูงสุดจาก Facebook
-          </p>
+          <p className="text-gray-400 mt-2">ค้นหาโพสต์ที่มี Engagement สูงสุดจาก Facebook</p>
         </motion.div>
 
         {/* Search Form */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="max-w-2xl mx-auto"
-        >
-          <SearchForm onSearchComplete={handleSearchComplete} />
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="max-w-2xl mx-auto">
+          <SearchForm onSearchComplete={setSearchResult} />
         </motion.div>
 
         {/* Results */}
         {searchResult && searchResult.contents && searchResult.contents.length > 0 && (
-          <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="space-y-6"
-          >
-            {/* Results Header */}
+          <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+            {/* Header */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div className="flex items-center gap-3">
                 <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-green-500 to-emerald-600 shadow-lg">
                   <Trophy className="h-6 w-6 text-white" />
                 </div>
                 <div>
-                  <h2 className="text-xl font-bold text-white">
-                    🏆 Top {searchResult.resultCount} โพสต์ไวรัล
-                  </h2>
+                  <h2 className="text-xl font-bold text-white">🏆 Top {searchResult.resultCount} โพสต์ไวรัล</h2>
                   <p className="text-sm text-gray-400">
-                    คำค้นหา: <span className="text-blue-400 font-medium">"{searchResult.keyword}"</span>
+                    คำค้นหา: <span className="text-blue-400">"{searchResult.keyword}"</span>
                   </p>
                 </div>
               </div>
@@ -292,7 +266,7 @@ export default function SearchPage() {
               </div>
             )}
 
-            {/* Content Grid */}
+            {/* Cards */}
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
               {searchResult.contents.map((content) => (
                 <PostCard key={content.id} content={content} />
@@ -301,18 +275,14 @@ export default function SearchPage() {
           </motion.div>
         )}
 
-        {/* Empty State */}
+        {/* Empty */}
         {searchResult && (!searchResult.contents || searchResult.contents.length === 0) && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="text-center py-16"
-          >
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center py-16">
             <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-slate-800 flex items-center justify-center">
               <span className="text-4xl">🔍</span>
             </div>
             <h3 className="text-xl font-semibold text-white mb-2">ไม่พบโพสต์</h3>
-            <p className="text-gray-400">ลองเปลี่ยน keyword หรือช่วงเวลาใหม่</p>
+            <p className="text-gray-400">ลองเปลี่ยน keyword หรือช่วงเวลา</p>
           </motion.div>
         )}
       </div>
