@@ -1,9 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { PrismaClient } from "@prisma/client";
 import { ApifyClient } from "apify-client";
-
-const prisma = new PrismaClient();
 
 // ============================================
 // INTERFACES
@@ -58,7 +55,7 @@ function calculateViralScore(likes: number, comments: number, shares: number): n
   return (likes * 1) + (comments * 3) + (shares * 5);
 }
 
-function processApifyResults(items: ApifyFacebookPost[], keyword: string): ViralPost[] {
+function processApifyResults(items: ApifyFacebookPost[]): ViralPost[] {
   // Step 1: Filter - Remove items with no content or missing URL
   const filtered = items.filter(item => {
     const url = item.url || item.postUrl || item.link;
@@ -156,7 +153,6 @@ async function searchFacebookViralContent(
   const client = new ApifyClient({ token: apifyToken });
 
   // Use Facebook Search Scraper actor
-  // Actor: apify/facebook-search-scraper
   const actorId = process.env.APIFY_ACTOR_ID || "apify/facebook-posts-scraper";
   
   // Build the search URL
@@ -170,32 +166,23 @@ async function searchFacebookViralContent(
 
   console.log(`Starting Apify search for keyword: "${keyword}"`);
   console.log(`Using actor: ${actorId}`);
-  console.log(`Search URL: ${searchUrl}`);
 
   try {
-    // Run the actor and wait for it to finish
     const run = await client.actor(actorId).call(input, {
-      waitSecs: 120, // Wait up to 2 minutes
+      waitSecs: 120,
     });
 
     console.log(`Apify run completed with status: ${run.status}`);
 
-    // Fetch results from the dataset
     const { items } = await client.dataset(run.defaultDatasetId).listItems();
 
     console.log(`Retrieved ${items.length} items from Apify`);
 
     if (items.length === 0) {
-      console.log("No results from Apify, returning empty array");
       return [];
     }
 
-    // Process results with our viral scoring algorithm
-    const viralPosts = processApifyResults(items as ApifyFacebookPost[], keyword);
-
-    console.log(`Processed ${viralPosts.length} viral posts`);
-
-    return viralPosts;
+    return processApifyResults(items as ApifyFacebookPost[]);
   } catch (error) {
     console.error("Apify search error:", error);
     throw error;
@@ -203,56 +190,71 @@ async function searchFacebookViralContent(
 }
 
 // ============================================
-// DATABASE HELPERS
+// DATABASE OPERATIONS (Optional - with error handling)
 // ============================================
 
-async function getOrCreateUser(clerkId: string) {
-  let user = await prisma.user.findUnique({
-    where: { clerkId },
-  });
+async function tryDatabaseOperations(
+  clerkId: string,
+  keyword: string,
+  platform: string,
+  viralPosts: ViralPost[],
+  isDemo: boolean
+) {
+  try {
+    // Dynamic import to handle cases where database is not available
+    const { default: prisma } = await import("@/lib/prisma");
 
-  if (!user) {
-    user = await prisma.user.create({
+    // Get or create user
+    let user = await prisma.user.findUnique({ where: { clerkId } });
+    if (!user) {
+      user = await prisma.user.create({
+        data: { clerkId, email: `${clerkId}@placeholder.com` },
+      });
+    }
+
+    // Create search query
+    const searchQuery = await prisma.searchQuery.create({
       data: {
-        clerkId,
-        email: `${clerkId}@placeholder.com`,
+        userId: user.id,
+        keyword,
+        platform,
+        status: "COMPLETED",
+        apifyRunId: isDemo ? "demo_mode" : `apify_${Date.now()}`,
+        resultCount: viralPosts.length,
       },
     });
-  }
 
-  return user;
-}
+    // Save contents
+    for (let i = 0; i < viralPosts.length; i++) {
+      const post = viralPosts[i];
+      await prisma.content.create({
+        data: {
+          searchQueryId: searchQuery.id,
+          externalId: `${searchQuery.id}_${i}_${Date.now()}`,
+          platform,
+          url: post.facebookUrl,
+          caption: post.caption,
+          imageUrl: post.imageUrl || null,
+          likesCount: post.metrics.likes,
+          commentsCount: post.metrics.comments,
+          sharesCount: post.metrics.shares,
+          engagementScore: post.score,
+          metricsJson: post.metrics as any,
+        },
+      });
+    }
 
-async function checkUserQuota(userId: string): Promise<boolean> {
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: {
-      searchQuota: true,
-      searchesUsed: true,
-      quotaResetDate: true,
-    },
-  });
-
-  if (!user) return false;
-
-  const now = new Date();
-  const resetDate = new Date(user.quotaResetDate);
-
-  if (
-    now.getMonth() !== resetDate.getMonth() ||
-    now.getFullYear() !== resetDate.getFullYear()
-  ) {
+    // Update search count
     await prisma.user.update({
-      where: { id: userId },
-      data: {
-        searchesUsed: 0,
-        quotaResetDate: now,
-      },
+      where: { id: user.id },
+      data: { searchesUsed: { increment: 1 } },
     });
-    return true;
-  }
 
-  return user.searchesUsed < user.searchQuota;
+    return { success: true, queryId: searchQuery.id };
+  } catch (dbError) {
+    console.error("Database operation failed (non-critical):", dbError);
+    return { success: false, queryId: `temp_${Date.now()}` };
+  }
 }
 
 // ============================================
@@ -261,14 +263,16 @@ async function checkUserQuota(userId: string): Promise<boolean> {
 
 export async function POST(request: NextRequest) {
   try {
+    // Check authentication
     const { userId: clerkId } = await auth();
 
     if (!clerkId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const user = await getOrCreateUser(clerkId);
-    const { keyword, platform, maxPosts = 5, demoMode = false } = await request.json();
+    // Parse request body
+    const body = await request.json();
+    const { keyword, platform = "FACEBOOK", demoMode = true } = body;
 
     if (!keyword) {
       return NextResponse.json(
@@ -277,31 +281,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check quota
-    const hasQuota = await checkUserQuota(user.id);
-    if (!hasQuota) {
-      return NextResponse.json(
-        {
-          error: "Quota Exceeded",
-          message: "คุณใช้โควต้าการค้นหาหมดแล้วในเดือนนี้ กรุณาอัพเกรดแพ็คเกจ",
-        },
-        { status: 429 }
-      );
-    }
-
-    // Create search query record
-    const searchQuery = await prisma.searchQuery.create({
-      data: {
-        userId: user.id,
-        keyword,
-        platform: platform || "FACEBOOK",
-        status: "PROCESSING",
-      },
-    });
+    console.log(`Search request: keyword="${keyword}", demoMode=${demoMode}`);
 
     let viralPosts: ViralPost[] = [];
     let isDemo = demoMode;
-    let apifyRunId = "demo_mode";
 
     // Determine if we should use real API or demo mode
     const apifyToken = process.env.APIFY_API_TOKEN;
@@ -311,7 +294,6 @@ export async function POST(request: NextRequest) {
       try {
         console.log("Using real Apify API...");
         viralPosts = await searchFacebookViralContent(keyword, apifyToken);
-        apifyRunId = `apify_${Date.now()}`;
         isDemo = false;
 
         // If no results, fallback to demo
@@ -319,86 +301,52 @@ export async function POST(request: NextRequest) {
           console.log("No results from Apify, falling back to demo mode");
           viralPosts = generateMockData(keyword);
           isDemo = true;
-          apifyRunId = "demo_fallback_no_results";
         }
       } catch (apifyError) {
         console.error("Apify error, falling back to demo mode:", apifyError);
         viralPosts = generateMockData(keyword);
         isDemo = true;
-        apifyRunId = "demo_fallback_error";
       }
     } else {
       console.log("Using demo mode...");
       viralPosts = generateMockData(keyword);
     }
 
-    // Save results to database
-    const contents = [];
-    for (let i = 0; i < viralPosts.length; i++) {
-      const post = viralPosts[i];
-      const externalId = `${searchQuery.id}_${i}_${Date.now()}`;
+    // Try to save to database (non-blocking)
+    const dbResult = await tryDatabaseOperations(
+      clerkId,
+      keyword,
+      platform,
+      viralPosts,
+      isDemo
+    );
 
-      try {
-        const content = await prisma.content.create({
-          data: {
-            searchQueryId: searchQuery.id,
-            externalId,
-            platform: platform || "FACEBOOK",
-            url: post.facebookUrl,
-            caption: post.caption,
-            imageUrl: post.imageUrl || null,
-            likesCount: post.metrics.likes,
-            commentsCount: post.metrics.comments,
-            sharesCount: post.metrics.shares,
-            engagementScore: post.score,
-            metricsJson: post.metrics as any,
-          },
-        });
-
-        contents.push({
-          id: content.id,
-          externalId: content.externalId,
-          url: content.url,
-          caption: content.caption,
-          imageUrl: content.imageUrl,
-          pageName: null,
-          postType: "post",
-          postedAt: null,
-          likesCount: content.likesCount,
-          commentsCount: content.commentsCount,
-          sharesCount: content.sharesCount,
-          viewsCount: 0,
-          engagementScore: content.engagementScore,
-          platform: content.platform,
-          rank: i + 1,
-          viralScore: post.score,
-        });
-      } catch (err) {
-        console.error("Error saving content:", err);
-      }
-    }
-
-    // Update search query status
-    await prisma.searchQuery.update({
-      where: { id: searchQuery.id },
-      data: {
-        status: "COMPLETED",
-        apifyRunId,
-        resultCount: contents.length,
-      },
-    });
-
-    // Increment user's search count
-    await prisma.user.update({
-      where: { id: user.id },
-      data: {
-        searchesUsed: { increment: 1 },
-      },
-    });
+    // Transform to response format
+    const contents = viralPosts.map((post, index) => ({
+      id: `${dbResult.queryId}_${index}`,
+      externalId: `post_${index}_${Date.now()}`,
+      url: post.facebookUrl,
+      caption: post.caption,
+      imageUrl: post.imageUrl,
+      pageName: null,
+      pageUrl: null,
+      postType: "post",
+      postedAt: null,
+      likesCount: post.metrics.likes,
+      commentsCount: post.metrics.comments,
+      sharesCount: post.metrics.shares,
+      viewsCount: 0,
+      engagementScore: post.score,
+      platform,
+      rank: index + 1,
+      viralScore: post.score,
+      reactionsJson: null,
+      videoUrl: null,
+    }));
 
     return NextResponse.json({
       message: "Search completed",
-      queryId: searchQuery.id,
+      queryId: dbResult.queryId,
       status: "COMPLETED",
       resultCount: contents.length,
       contents,
@@ -408,7 +356,10 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("Search error:", error);
     return NextResponse.json(
-      { error: "Failed to process search", details: String(error) },
+      { 
+        error: "Failed to process search", 
+        message: error instanceof Error ? error.message : "Unknown error",
+      },
       { status: 500 }
     );
   }
