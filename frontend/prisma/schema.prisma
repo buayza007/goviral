@@ -1,0 +1,117 @@
+// GoViral Database Schema
+// Prisma Schema for PostgreSQL
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User Model - SaaS Multi-tenancy
+model User {
+  id               String         @id @default(cuid())
+  clerkId          String         @unique // Clerk User ID for authentication
+  email            String         @unique
+  name             String?
+  avatarUrl        String?
+  subscriptionPlan SubscriptionPlan @default(FREE)
+  searchQuota      Int            @default(10) // Monthly search quota
+  searchesUsed     Int            @default(0)  // Searches used this month
+  quotaResetDate   DateTime       @default(now())
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  // Relations
+  searchQueries SearchQuery[]
+
+  @@index([clerkId])
+  @@index([email])
+}
+
+// Subscription Plans
+enum SubscriptionPlan {
+  FREE
+  STARTER
+  PRO
+  ENTERPRISE
+}
+
+// Search Query Model - Stores user search history
+model SearchQuery {
+  id        String       @id @default(cuid())
+  userId    String
+  keyword   String       // Search keyword or page URL
+  platform  Platform     // Social media platform
+  status    SearchStatus @default(PENDING)
+  apifyRunId String?     // Apify run ID for tracking
+  resultCount Int        @default(0)
+  errorMessage String?
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  // Relations
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  contents Content[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+// Supported Platforms
+enum Platform {
+  FACEBOOK
+  INSTAGRAM
+  TIKTOK
+}
+
+// Search Status
+enum SearchStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+// Content Model - Stores scraped social media posts
+model Content {
+  id             String   @id @default(cuid())
+  searchQueryId  String
+  externalId     String   // Original post ID from platform
+  platform       Platform
+  url            String   // Original post URL
+  pageUrl        String?  // Source page URL
+  pageName       String?  // Source page name
+  caption        String?  @db.Text // Post caption/text
+  imageUrl       String?  // Thumbnail/preview image
+  videoUrl       String?  // Video URL if applicable
+  postType       String?  // photo, video, link, status, etc.
+  postedAt       DateTime? // Original post date
+
+  // Engagement Metrics (stored as separate fields for easy querying)
+  likesCount     Int      @default(0)
+  commentsCount  Int      @default(0)
+  sharesCount    Int      @default(0)
+  viewsCount     Int      @default(0)
+  engagementScore Int     @default(0) // Calculated: likes + comments + shares
+
+  // Reaction Breakdown (for sentiment analysis)
+  reactionsJson  Json?    // Detailed reactions: love, haha, wow, sad, angry
+
+  // Raw metrics JSON for flexibility
+  metricsJson    Json?    // Full metrics data from Apify
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  // Relations
+  searchQuery SearchQuery @relation(fields: [searchQueryId], references: [id], onDelete: Cascade)
+
+  @@unique([searchQueryId, externalId])
+  @@index([searchQueryId])
+  @@index([engagementScore(sort: Desc)])
+  @@index([postedAt])
+}
