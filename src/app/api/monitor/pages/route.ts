@@ -18,45 +18,62 @@ export async function GET() {
 
     const user = await prisma.user.findUnique({ where: { clerkId } });
     if (!user) {
-      return NextResponse.json({ pages: [], totalPosts: 0, newPosts: 0 });
+      return NextResponse.json({ pages: [], totalPosts: 0, newPosts: 0, count: 0 });
     }
 
-    const pages = await prisma.monitoredPage.findMany({
-      where: { userId: user.id },
-      include: {
-        _count: {
-          select: { posts: true }
+    // Try to fetch pages, return empty if table doesn't exist
+    try {
+      const pages = await prisma.monitoredPage.findMany({
+        where: { userId: user.id },
+        include: {
+          _count: {
+            select: { posts: true }
+          },
+          posts: {
+            where: { isNew: true },
+            select: { id: true }
+          }
         },
-        posts: {
-          where: { isNew: true },
-          select: { id: true }
-        }
-      },
-      orderBy: { createdAt: "desc" }
-    });
+        orderBy: { createdAt: "desc" }
+      });
 
-    const formattedPages = pages.map(page => ({
-      id: page.id,
-      pageUrl: page.pageUrl,
-      pageName: page.pageName,
-      pageAvatar: page.pageAvatar,
-      isActive: page.isActive,
-      checkInterval: page.checkInterval,
-      lastCheckedAt: page.lastCheckedAt,
-      totalPosts: page._count.posts,
-      newPosts: page.posts.length,
-      createdAt: page.createdAt,
-    }));
+      const formattedPages = pages.map(page => ({
+        id: page.id,
+        pageUrl: page.pageUrl,
+        pageName: page.pageName,
+        pageAvatar: page.pageAvatar,
+        isActive: page.isActive,
+        checkInterval: page.checkInterval,
+        lastCheckedAt: page.lastCheckedAt,
+        totalPosts: page._count.posts,
+        newPosts: page.posts.length,
+        createdAt: page.createdAt,
+      }));
 
-    const totalPosts = formattedPages.reduce((sum, p) => sum + p.totalPosts, 0);
-    const newPosts = formattedPages.reduce((sum, p) => sum + p.newPosts, 0);
+      const totalPosts = formattedPages.reduce((sum, p) => sum + p.totalPosts, 0);
+      const newPosts = formattedPages.reduce((sum, p) => sum + p.newPosts, 0);
 
-    return NextResponse.json({ 
-      pages: formattedPages,
-      totalPosts,
-      newPosts,
-      count: pages.length
-    });
+      return NextResponse.json({ 
+        pages: formattedPages,
+        totalPosts,
+        newPosts,
+        count: pages.length
+      });
+    } catch (dbError: unknown) {
+      // Check if table doesn't exist (P2021 = table not found)
+      const errorMessage = dbError instanceof Error ? dbError.message : String(dbError);
+      if (errorMessage.includes("P2021") || errorMessage.includes("does not exist") || errorMessage.includes("MonitoredPage")) {
+        console.warn("MonitoredPage table not found, returning empty. Run: npx prisma db push");
+        return NextResponse.json({ 
+          pages: [], 
+          totalPosts: 0, 
+          newPosts: 0, 
+          count: 0,
+          warning: "Database tables not migrated yet. Please run: npx prisma db push"
+        });
+      }
+      throw dbError;
+    }
 
   } catch (error) {
     console.error("Error fetching monitored pages:", error);
@@ -147,9 +164,20 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error("Error adding monitored page:", error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    
+    // Check if table doesn't exist
+    if (errorMessage.includes("P2021") || errorMessage.includes("does not exist") || errorMessage.includes("MonitoredPage")) {
+      return NextResponse.json({ 
+        error: "ตารางยังไม่ถูกสร้าง กรุณารอสักครู่แล้วลองใหม่",
+        message: "Database migration pending",
+        needsMigration: true
+      }, { status: 503 });
+    }
+    
     return NextResponse.json({ 
       error: "Failed to add page",
-      message: error instanceof Error ? error.message : "Unknown error"
+      message: errorMessage
     }, { status: 500 });
   }
 }
