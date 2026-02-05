@@ -122,7 +122,7 @@ function processAdsData(rawAds: Record<string, unknown>[]): ProcessedAd[] {
       startDate: ad.startDate || "",
       endDate: ad.endDate,
       // Creative
-      bodyText: snapshot.body_text || (raw as Record<string, unknown>).body?.text as string,
+      bodyText: snapshot.body_text || ((raw as Record<string, unknown>).body as Record<string, unknown>)?.text as string | undefined,
       caption: snapshot.caption,
       ctaText: snapshot.cta_text,
       ctaType: snapshot.cta_type,
