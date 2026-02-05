@@ -80,6 +80,7 @@ interface ApifyCredits {
     usagePercent: number;
     isLow: boolean;
     isExhausted: boolean;
+    planName?: string;
     currentPeriodEnd?: string;
   };
   error?: string;
@@ -439,7 +440,13 @@ export default function AdsPage() {
                     }`} />
                   </div>
                   <div>
-                    <p className="text-sm text-gray-400">Apify Credits</p>
+                    <p className="text-sm text-gray-400">
+                      Apify Credits {credits?.account?.planName && (
+                        <span className="text-xs px-1.5 py-0.5 rounded bg-slate-700 ml-2">
+                          {credits.account.planName}
+                        </span>
+                      )}
+                    </p>
                     {loadingCredits ? (
                       <div className="flex items-center gap-2">
                         <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
@@ -457,7 +464,7 @@ export default function AdsPage() {
                           ${credits.account.remainingUsd.toFixed(2)}
                         </span>
                         <span className="text-sm text-gray-500">
-                          / ${credits.account.limitUsd.toFixed(2)} (ใช้ไป {credits.account.usagePercent.toFixed(0)}%)
+                          / ${credits.account.limitUsd.toFixed(2)} (ใช้ไป ${credits.account.usedUsd.toFixed(2)})
                         </span>
                       </div>
                     ) : credits?.error ? (
