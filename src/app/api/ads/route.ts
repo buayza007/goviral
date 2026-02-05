@@ -275,8 +275,8 @@ export async function POST(request: NextRequest) {
     // Search by page - try URLs first, then IDs
     if (searchType === "page") {
       if (processedPageUrls.length > 0) {
-        // Use startUrls for full URLs
-        actorInput.startUrls = processedPageUrls.map(url => ({ url }));
+        // Use 'urls' field for Facebook Ad Library scraper
+        actorInput.urls = processedPageUrls;
       }
       if (processedPageIds.length > 0) {
         actorInput.pageIds = processedPageIds;
