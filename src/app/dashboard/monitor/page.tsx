@@ -81,6 +81,24 @@ function formatTimeAgo(date: string | null): string {
   return `${days} วันที่แล้ว`;
 }
 
+// Format date in Thai timezone (GMT+7)
+function formatThaiDate(date: string | null): string {
+  if (!date) return "ไม่ทราบวันที่";
+  try {
+    const d = new Date(date);
+    return d.toLocaleDateString("th-TH", {
+      timeZone: "Asia/Bangkok",
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return "ไม่ทราบวันที่";
+  }
+}
+
 export default function MonitorPage() {
   const [pages, setPages] = useState<MonitoredPage[]>([]);
   const [posts, setPosts] = useState<MonitoredPost[]>([]);
@@ -768,8 +786,8 @@ export default function MonitorPage() {
                                 <span className="text-xs text-orange-400 font-medium">
                                   {post.page.name || post.page.url.replace(/https?:\/\/(www\.)?facebook\.com\/?/, '')}
                                 </span>
-                                <span className="text-xs text-gray-500">
-                                  {formatTimeAgo(post.discoveredAt)}
+                                <span className="text-xs text-gray-500" title={`โพสต์เมื่อ: ${formatThaiDate(post.postedAt)}`}>
+                                  📅 {post.postedAt ? formatThaiDate(post.postedAt) : formatTimeAgo(post.discoveredAt)}
                                 </span>
                               </div>
 

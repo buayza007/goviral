@@ -47,6 +47,24 @@ function getScoreLevel(score: number) {
   return { emoji: "✨", color: "text-blue-400" };
 }
 
+// Format date in Thai timezone (GMT+7)
+function formatThaiDate(date: string | null): string {
+  if (!date) return "";
+  try {
+    const d = new Date(date);
+    return d.toLocaleDateString("th-TH", {
+      timeZone: "Asia/Bangkok",
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return "";
+  }
+}
+
 function PostCard({ content }: { content: ContentItem }) {
   const rank = getRankBadge(content.rank);
   const scoreLevel = getScoreLevel(content.viralScore);
@@ -117,20 +135,27 @@ function PostCard({ content }: { content: ContentItem }) {
 
         {/* Content */}
         <div className="p-4 flex-1 flex flex-col">
-          {/* Author */}
-          {content.pageName && (
-            <div className="flex items-center gap-2 mb-2">
-              {content.authorAvatar && (
-                <img 
-                  src={content.authorAvatar} 
-                  alt={content.pageName}
-                  className="w-6 h-6 rounded-full object-cover"
-                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                />
-              )}
-              <span className="text-xs text-blue-400 font-medium truncate">{content.pageName}</span>
-            </div>
-          )}
+          {/* Author & Date */}
+          <div className="flex items-center justify-between mb-2">
+            {content.pageName && (
+              <div className="flex items-center gap-2">
+                {content.authorAvatar && (
+                  <img 
+                    src={content.authorAvatar} 
+                    alt={content.pageName}
+                    className="w-6 h-6 rounded-full object-cover"
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                  />
+                )}
+                <span className="text-xs text-blue-400 font-medium truncate">{content.pageName}</span>
+              </div>
+            )}
+            {content.postedAt && (
+              <span className="text-[10px] text-gray-500" title={formatThaiDate(content.postedAt)}>
+                📅 {formatThaiDate(content.postedAt)}
+              </span>
+            )}
+          </div>
 
           {/* Caption */}
           <p className="text-sm text-gray-300 line-clamp-3 flex-1 min-h-[60px]">
