@@ -232,45 +232,38 @@ function AdCard({ ad }: { ad: ProcessedAd }) {
             </span>
           </div>
 
-          {/* Metrics */}
-          <div className="grid grid-cols-2 gap-2 pt-3 border-t border-slate-700">
-            <div className="text-center p-2 rounded bg-slate-900/50">
-              <div className="flex items-center justify-center gap-1">
-                <DollarSign className="w-3 h-3 text-green-400" />
-                <span className="text-xs font-bold text-green-400">
-                  {formatSpend(ad.spendMin, ad.spendMax, ad.currency)}
+          {/* Platforms */}
+          {ad.platforms && ad.platforms.length > 0 && (
+            <div className="flex flex-wrap gap-1 pt-3 border-t border-slate-700 mb-3">
+              {ad.platforms.map((platform, idx) => (
+                <span
+                  key={idx}
+                  className={`px-2 py-0.5 rounded text-[10px] font-medium ${
+                    platform === "FACEBOOK" ? "bg-blue-500/20 text-blue-400" :
+                    platform === "INSTAGRAM" ? "bg-pink-500/20 text-pink-400" :
+                    platform === "MESSENGER" ? "bg-purple-500/20 text-purple-400" :
+                    "bg-gray-500/20 text-gray-400"
+                  }`}
+                >
+                  {platform === "AUDIENCE_NETWORK" ? "Audience" : platform}
                 </span>
-              </div>
-              <p className="text-[9px] text-gray-500 mt-0.5">Spend</p>
+              ))}
             </div>
-            <div className="text-center p-2 rounded bg-slate-900/50">
-              <div className="flex items-center justify-center gap-1">
-                <Eye className="w-3 h-3 text-blue-400" />
-                <span className="text-xs font-bold text-blue-400">
-                  {formatRange(ad.impressionsMin, ad.impressionsMax)}
+          )}
+
+          {/* Categories */}
+          {ad.categories && ad.categories.length > 0 && ad.categories[0] !== "UNKNOWN" && (
+            <div className="flex flex-wrap gap-1 mb-3">
+              {ad.categories.map((cat, idx) => (
+                <span
+                  key={idx}
+                  className="px-2 py-0.5 rounded bg-slate-700 text-[10px] text-gray-300"
+                >
+                  {cat}
                 </span>
-              </div>
-              <p className="text-[9px] text-gray-500 mt-0.5">Impressions</p>
+              ))}
             </div>
-            <div className="text-center p-2 rounded bg-slate-900/50">
-              <div className="flex items-center justify-center gap-1">
-                <Users className="w-3 h-3 text-purple-400" />
-                <span className="text-xs font-bold text-purple-400">
-                  {formatRange(ad.reachMin, ad.reachMax)}
-                </span>
-              </div>
-              <p className="text-[9px] text-gray-500 mt-0.5">Reach</p>
-            </div>
-            <div className="text-center p-2 rounded bg-slate-900/50">
-              <div className="flex items-center justify-center gap-1">
-                <Globe className="w-3 h-3 text-orange-400" />
-                <span className="text-xs font-bold text-orange-400">
-                  {ad.platforms?.length || 0}
-                </span>
-              </div>
-              <p className="text-[9px] text-gray-500 mt-0.5">Platforms</p>
-            </div>
-          </div>
+          )}
 
           {/* View Ad */}
           <a
