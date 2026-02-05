@@ -6,8 +6,6 @@ import {
   Search,
   Megaphone,
   TrendingUp,
-  Eye,
-  DollarSign,
   ExternalLink,
   Play,
   Image as ImageIcon,
@@ -16,8 +14,6 @@ import {
   AlertCircle,
   CheckCircle,
   XCircle,
-  Globe,
-  Users,
   Calendar,
   Target,
   Bug,
@@ -28,7 +24,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "@/components/ui/use-toast";
-import { formatNumber } from "@/lib/utils";
 
 interface ProcessedAd {
   id: string;
@@ -89,28 +84,6 @@ function formatThaiDate(date: string | null): string {
   }
 }
 
-// Format spend range
-function formatSpend(min?: number, max?: number, currency?: string): string {
-  if (!min && !max) return "-";
-  const curr = currency || "THB";
-  if (min && max) {
-    return `${formatNumber(min)} - ${formatNumber(max)} ${curr}`;
-  }
-  if (min) return `${formatNumber(min)}+ ${curr}`;
-  if (max) return `≤${formatNumber(max)} ${curr}`;
-  return "-";
-}
-
-// Format impressions range
-function formatRange(min?: number, max?: number): string {
-  if (!min && !max) return "-";
-  if (min && max) {
-    return `${formatNumber(min)} - ${formatNumber(max)}`;
-  }
-  if (min) return `${formatNumber(min)}+`;
-  if (max) return `≤${formatNumber(max)}`;
-  return "-";
-}
 
 // Ad Card Component
 function AdCard({ ad }: { ad: ProcessedAd }) {
