@@ -153,11 +153,19 @@ function processAdsData(rawAds: Record<string, unknown>[]): ProcessedAd[] {
     const cards = (snapshot.cards || []) as Array<Record<string, unknown>>;
     
     // Get first image from images array or cards
+    // DPA (Dynamic Product Ads) have images inside cards array, not images array
     let imageUrl: string | undefined;
     if (images.length > 0) {
+      // Standard image ads - get from images array
       imageUrl = (images[0].resized_image_url || images[0].original_image_url) as string;
-    } else if (cards.length > 0 && cards[0].video_preview_image_url) {
-      imageUrl = cards[0].video_preview_image_url as string;
+    } else if (cards.length > 0) {
+      // DPA/Carousel ads - get from first card
+      const firstCard = cards[0];
+      imageUrl = (
+        firstCard.resized_image_url || 
+        firstCard.original_image_url || 
+        firstCard.video_preview_image_url
+      ) as string;
     }
     
     // Get video info from videos array or cards
@@ -170,7 +178,7 @@ function processAdsData(rawAds: Record<string, unknown>[]): ProcessedAd[] {
       // Check cards for video
       const cardWithVideo = cards.find(c => c.video_hd_url || c.video_sd_url);
       if (cardWithVideo) {
-        videoThumbnail = cardWithVideo.video_preview_image_url as string;
+        videoThumbnail = (cardWithVideo.video_preview_image_url || cardWithVideo.resized_image_url) as string;
         videoUrl = (cardWithVideo.video_hd_url || cardWithVideo.video_sd_url) as string;
       }
     }
