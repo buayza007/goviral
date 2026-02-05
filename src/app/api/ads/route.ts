@@ -257,35 +257,41 @@ export async function POST(request: NextRequest) {
     // Initialize Apify client
     const client = new ApifyClient({ token: apifyToken });
 
-    // Build input for Apify actor
-    const actorInput: Record<string, unknown> = {
-      country: country,
-      maxAds: Math.min(limit, 100),
-    };
+    // Build input for Apify actor based on documentation
+    const actorInput: Record<string, unknown> = {};
 
-    // Search by keyword
+    // Search by keyword - construct Ad Library search URL
     if (searchType === "keyword" && query) {
-      actorInput.searchQuery = query.trim();
+      // Create Ad Library search URL
+      const adLibrarySearchUrl = `https://www.facebook.com/ads/library/?active_status=all&ad_type=all&country=${country}&q=${encodeURIComponent(query.trim())}&search_type=keyword_unordered&media_type=all`;
+      actorInput.urls = [adLibrarySearchUrl];
+      actorInput.maxAds = Math.min(limit, 100);
     }
 
-    // Search by page - try multiple parameter names that the actor might accept
+    // Search by page - use "Scrape ads of facebook pages" action
     if (searchType === "page" && pageIdentifiers.length > 0) {
-      // Try pageIds (array of page IDs/names)
-      actorInput.pageIds = pageIdentifiers;
-      // Also set as advertiserId for single page
-      if (pageIdentifiers.length === 1) {
-        actorInput.advertiserId = pageIdentifiers[0];
+      // Set action to scrape ads of facebook pages
+      actorInput.action = "Scrape ads of facebook pages";
+      // Provide page URLs (convert identifiers back to full URLs if needed)
+      const pageUrlList = pageIdentifiers.map(id => {
+        if (id.includes("facebook.com")) {
+          return id;
+        }
+        // Convert page ID/username to URL
+        return `https://www.facebook.com/${id}`;
+      });
+      actorInput.pageUrls = pageUrlList;
+      actorInput.maxAdsPerPage = Math.min(limit, 100);
+    }
+
+    // Ad type filter (only for keyword search with Ad Library URL)
+    if (searchType === "keyword") {
+      if (adType !== "all") {
+        actorInput.adType = adType;
       }
-    }
-
-    // Ad type filter
-    if (adType !== "all") {
-      actorInput.adType = adType;
-    }
-
-    // Active status filter
-    if (activeStatus !== "all") {
-      actorInput.adActiveStatus = activeStatus === "active" ? "ACTIVE" : "INACTIVE";
+      if (activeStatus !== "all") {
+        actorInput.adActiveStatus = activeStatus === "active" ? "ACTIVE" : "INACTIVE";
+      }
     }
 
     console.log("[Ads Search] Apify Input:", JSON.stringify(actorInput, null, 2));
