@@ -36,11 +36,104 @@ try {
 }
 
 // ============================================
-// Helper: Create tables if they don't exist
+// Helper: Create ALL tables if they don't exist
 // ============================================
 async function ensureTablesExist() {
   try {
-    // Try to create MonitoredPage table
+    console.log("[DB] Starting table creation...");
+
+    // 1. Create ENUM types first
+    await prisma.$executeRawUnsafe(`
+      DO $$ BEGIN
+        CREATE TYPE "SubscriptionPlan" AS ENUM ('FREE', 'STARTER', 'PRO', 'ENTERPRISE');
+      EXCEPTION
+        WHEN duplicate_object THEN null;
+      END $$;
+    `).catch(() => console.log("[DB] SubscriptionPlan enum exists"));
+
+    await prisma.$executeRawUnsafe(`
+      DO $$ BEGIN
+        CREATE TYPE "Platform" AS ENUM ('FACEBOOK', 'INSTAGRAM', 'TIKTOK');
+      EXCEPTION
+        WHEN duplicate_object THEN null;
+      END $$;
+    `).catch(() => console.log("[DB] Platform enum exists"));
+
+    await prisma.$executeRawUnsafe(`
+      DO $$ BEGIN
+        CREATE TYPE "SearchStatus" AS ENUM ('PENDING', 'PROCESSING', 'COMPLETED', 'FAILED');
+      EXCEPTION
+        WHEN duplicate_object THEN null;
+      END $$;
+    `).catch(() => console.log("[DB] SearchStatus enum exists"));
+
+    // 2. Create User table
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "User" (
+        "id" TEXT NOT NULL,
+        "clerkId" TEXT NOT NULL,
+        "email" TEXT NOT NULL,
+        "name" TEXT,
+        "avatarUrl" TEXT,
+        "subscriptionPlan" "SubscriptionPlan" NOT NULL DEFAULT 'FREE',
+        "searchQuota" INTEGER NOT NULL DEFAULT 10,
+        "searchesUsed" INTEGER NOT NULL DEFAULT 0,
+        "quotaResetDate" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "User_pkey" PRIMARY KEY ("id")
+      )
+    `);
+    console.log("[DB] User table created");
+
+    // 3. Create SearchQuery table
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "SearchQuery" (
+        "id" TEXT NOT NULL,
+        "userId" TEXT NOT NULL,
+        "keyword" TEXT NOT NULL,
+        "platform" "Platform" NOT NULL,
+        "status" "SearchStatus" NOT NULL DEFAULT 'PENDING',
+        "apifyRunId" TEXT,
+        "resultCount" INTEGER NOT NULL DEFAULT 0,
+        "errorMessage" TEXT,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "SearchQuery_pkey" PRIMARY KEY ("id")
+      )
+    `);
+    console.log("[DB] SearchQuery table created");
+
+    // 4. Create Content table
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "Content" (
+        "id" TEXT NOT NULL,
+        "searchQueryId" TEXT NOT NULL,
+        "externalId" TEXT NOT NULL,
+        "platform" "Platform" NOT NULL,
+        "url" TEXT NOT NULL,
+        "pageUrl" TEXT,
+        "pageName" TEXT,
+        "caption" TEXT,
+        "imageUrl" TEXT,
+        "videoUrl" TEXT,
+        "postType" TEXT,
+        "postedAt" TIMESTAMP(3),
+        "likesCount" INTEGER NOT NULL DEFAULT 0,
+        "commentsCount" INTEGER NOT NULL DEFAULT 0,
+        "sharesCount" INTEGER NOT NULL DEFAULT 0,
+        "viewsCount" INTEGER NOT NULL DEFAULT 0,
+        "engagementScore" INTEGER NOT NULL DEFAULT 0,
+        "reactionsJson" JSONB,
+        "metricsJson" JSONB,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "Content_pkey" PRIMARY KEY ("id")
+      )
+    `);
+    console.log("[DB] Content table created");
+
+    // 5. Create MonitoredPage table
     await prisma.$executeRawUnsafe(`
       CREATE TABLE IF NOT EXISTS "MonitoredPage" (
         "id" TEXT NOT NULL,
@@ -58,8 +151,9 @@ async function ensureTablesExist() {
         CONSTRAINT "MonitoredPage_pkey" PRIMARY KEY ("id")
       )
     `);
+    console.log("[DB] MonitoredPage table created");
 
-    // Create MonitoredPost table
+    // 6. Create MonitoredPost table
     await prisma.$executeRawUnsafe(`
       CREATE TABLE IF NOT EXISTS "MonitoredPost" (
         "id" TEXT NOT NULL,
@@ -81,26 +175,41 @@ async function ensureTablesExist() {
         CONSTRAINT "MonitoredPost_pkey" PRIMARY KEY ("id")
       )
     `);
+    console.log("[DB] MonitoredPost table created");
 
-    // Create indexes
+    // 7. Create unique constraints
     await prisma.$executeRawUnsafe(`
-      CREATE INDEX IF NOT EXISTS "MonitoredPage_userId_idx" ON "MonitoredPage"("userId")
+      CREATE UNIQUE INDEX IF NOT EXISTS "User_clerkId_key" ON "User"("clerkId")
     `).catch(() => {});
-    
     await prisma.$executeRawUnsafe(`
-      CREATE INDEX IF NOT EXISTS "MonitoredPost_pageId_idx" ON "MonitoredPost"("pageId")
+      CREATE UNIQUE INDEX IF NOT EXISTS "User_email_key" ON "User"("email")
     `).catch(() => {});
-
-    // Create unique constraint
+    await prisma.$executeRawUnsafe(`
+      CREATE UNIQUE INDEX IF NOT EXISTS "Content_searchQueryId_externalId_key" ON "Content"("searchQueryId", "externalId")
+    `).catch(() => {});
     await prisma.$executeRawUnsafe(`
       CREATE UNIQUE INDEX IF NOT EXISTS "MonitoredPage_userId_pageUrl_key" ON "MonitoredPage"("userId", "pageUrl")
     `).catch(() => {});
+    await prisma.$executeRawUnsafe(`
+      CREATE UNIQUE INDEX IF NOT EXISTS "MonitoredPost_pageId_postId_key" ON "MonitoredPost"("pageId", "postId")
+    `).catch(() => {});
 
-    console.log("[Monitor] Tables created/verified");
-    return true;
+    // 8. Create indexes
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "User_clerkId_idx" ON "User"("clerkId")`).catch(() => {});
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "User_email_idx" ON "User"("email")`).catch(() => {});
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "SearchQuery_userId_idx" ON "SearchQuery"("userId")`).catch(() => {});
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "SearchQuery_status_idx" ON "SearchQuery"("status")`).catch(() => {});
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Content_searchQueryId_idx" ON "Content"("searchQueryId")`).catch(() => {});
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "MonitoredPage_userId_idx" ON "MonitoredPage"("userId")`).catch(() => {});
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "MonitoredPage_isActive_idx" ON "MonitoredPage"("isActive")`).catch(() => {});
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "MonitoredPost_pageId_idx" ON "MonitoredPost"("pageId")`).catch(() => {});
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "MonitoredPost_isNew_idx" ON "MonitoredPost"("isNew")`).catch(() => {});
+
+    console.log("[DB] All tables and indexes created successfully!");
+    return { success: true, message: "All tables created successfully" };
   } catch (error) {
-    console.error("[Monitor] Error creating tables:", error);
-    return false;
+    console.error("[DB] Error creating tables:", error);
+    return { success: false, message: error instanceof Error ? error.message : "Unknown error" };
   }
 }
 
@@ -148,7 +257,7 @@ export async function GET(request: NextRequest) {
       }
 
       try {
-        const result = await prisma.$queryRawUnsafe(`SELECT COUNT(*) as count FROM "MonitoredPage"`);
+        await prisma.$queryRawUnsafe(`SELECT COUNT(*) as count FROM "MonitoredPage"`);
         debugInfo.tables = { ...debugInfo.tables as object, MonitoredPage: `✅ Exists` };
       } catch (e) {
         debugInfo.tables = { ...debugInfo.tables as object, MonitoredPage: `❌ Not found` };
@@ -157,6 +266,9 @@ export async function GET(request: NextRequest) {
 
       return NextResponse.json({ debug: debugInfo });
     }
+
+    // IMPORTANT: Ensure ALL tables exist FIRST
+    await ensureTablesExist();
 
     // Get user
     let user = await prisma.user.findUnique({ where: { clerkId } });
@@ -195,7 +307,7 @@ export async function GET(request: NextRequest) {
 
       return NextResponse.json({ 
         pages: formattedPages,
-        totalPosts: formattedPages.reduce((sum, p) => sum + p.totalPosts, 0),
+        totalPosts: formattedPages.reduce((sum: number, p: { totalPosts: number }) => sum + p.totalPosts, 0),
         newPosts: 0,
         count: formattedPages.length
       });
@@ -234,11 +346,8 @@ export async function POST(request: NextRequest) {
 
     // Handle migrate request
     if (migrate) {
-      const success = await ensureTablesExist();
-      return NextResponse.json({ 
-        success, 
-        message: success ? "Tables created successfully" : "Failed to create tables" 
-      });
+      const result = await ensureTablesExist();
+      return NextResponse.json(result);
     }
 
     if (!pageUrl?.trim()) {
@@ -249,6 +358,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "URL ต้องเป็น Facebook page" }, { status: 400 });
     }
 
+    // IMPORTANT: Ensure ALL tables exist FIRST before any Prisma operations
+    await ensureTablesExist();
+
     // Get or create user
     let user = await prisma.user.findUnique({ where: { clerkId } });
     if (!user) {
@@ -256,9 +368,6 @@ export async function POST(request: NextRequest) {
         data: { clerkId, email: `${clerkId}@placeholder.com` }
       });
     }
-
-    // Ensure tables exist
-    await ensureTablesExist();
 
     // Check if already monitoring
     try {
@@ -344,6 +453,9 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: "Missing page ID" }, { status: 400 });
     }
 
+    // Ensure tables exist first
+    await ensureTablesExist();
+
     const user = await prisma.user.findUnique({ where: { clerkId } });
     if (!user) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
@@ -388,6 +500,9 @@ export async function PATCH(request: NextRequest) {
     if (!pageId) {
       return NextResponse.json({ error: "Missing page ID" }, { status: 400 });
     }
+
+    // Ensure tables exist first
+    await ensureTablesExist();
 
     const user = await prisma.user.findUnique({ where: { clerkId } });
     if (!user) {
