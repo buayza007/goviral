@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Search,
@@ -19,6 +19,8 @@ import {
   Bug,
   ChevronDown,
   RefreshCw,
+  Users,
+  Wallet,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -66,6 +68,21 @@ interface SearchResult {
   activeAds: number;
   inactiveAds: number;
   ads: ProcessedAd[];
+}
+
+interface ApifyCredits {
+  configured: boolean;
+  valid: boolean;
+  account?: {
+    usedUsd: number;
+    limitUsd: number;
+    remainingUsd: number;
+    usagePercent: number;
+    isLow: boolean;
+    isExhausted: boolean;
+    currentPeriodEnd?: string;
+  };
+  error?: string;
 }
 
 // Format date in Thai
@@ -265,6 +282,27 @@ export default function AdsPage() {
   const [result, setResult] = useState<SearchResult | null>(null);
   const [showFilters, setShowFilters] = useState(false);
   const [debugData, setDebugData] = useState<Record<string, unknown> | null>(null);
+  const [credits, setCredits] = useState<ApifyCredits | null>(null);
+  const [loadingCredits, setLoadingCredits] = useState(false);
+
+  // Fetch Apify credits on page load
+  const fetchCredits = async () => {
+    setLoadingCredits(true);
+    try {
+      const res = await fetch("/api/ads/status");
+      const data = await res.json();
+      setCredits(data);
+    } catch (error) {
+      console.error("Failed to fetch credits:", error);
+      setCredits({ configured: false, valid: false, error: "Failed to fetch" });
+    } finally {
+      setLoadingCredits(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchCredits();
+  }, []);
 
   const handleSearch = async (debug = false) => {
     if (searchType === "keyword" && !query.trim()) {
@@ -320,6 +358,8 @@ export default function AdsPage() {
           description: `พบ ${data.totalAds} แอด (Active: ${data.activeAds})`,
         });
       }
+      // Refresh credits after search
+      fetchCredits();
     } catch (error) {
       console.error("Search error:", error);
       toast({
@@ -365,6 +405,112 @@ export default function AdsPage() {
           <p className="text-gray-400">
             ค้นหาและวิเคราะห์โฆษณาจาก Facebook Ad Library
           </p>
+        </motion.div>
+
+        {/* Apify Credits Status */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.05 }}
+        >
+          <Card className={`border ${
+            credits?.account?.isExhausted 
+              ? "bg-red-900/30 border-red-500/50" 
+              : credits?.account?.isLow 
+                ? "bg-yellow-900/30 border-yellow-500/50" 
+                : "bg-slate-800/50 border-slate-700"
+          }`}>
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className={`p-2 rounded-lg ${
+                    credits?.account?.isExhausted 
+                      ? "bg-red-500/20" 
+                      : credits?.account?.isLow 
+                        ? "bg-yellow-500/20" 
+                        : "bg-green-500/20"
+                  }`}>
+                    <Wallet className={`w-5 h-5 ${
+                      credits?.account?.isExhausted 
+                        ? "text-red-400" 
+                        : credits?.account?.isLow 
+                          ? "text-yellow-400" 
+                          : "text-green-400"
+                    }`} />
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-400">Apify Credits</p>
+                    {loadingCredits ? (
+                      <div className="flex items-center gap-2">
+                        <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
+                        <span className="text-gray-400">กำลังโหลด...</span>
+                      </div>
+                    ) : credits?.account ? (
+                      <div className="flex items-center gap-4">
+                        <span className={`text-lg font-bold ${
+                          credits.account.isExhausted 
+                            ? "text-red-400" 
+                            : credits.account.isLow 
+                              ? "text-yellow-400" 
+                              : "text-green-400"
+                        }`}>
+                          ${credits.account.remainingUsd.toFixed(2)}
+                        </span>
+                        <span className="text-sm text-gray-500">
+                          / ${credits.account.limitUsd.toFixed(2)} (ใช้ไป {credits.account.usagePercent.toFixed(0)}%)
+                        </span>
+                      </div>
+                    ) : credits?.error ? (
+                      <span className="text-red-400 text-sm">❌ {credits.error}</span>
+                    ) : (
+                      <span className="text-gray-400 text-sm">ไม่ได้ตั้งค่า API Token</span>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  {credits?.account?.isExhausted && (
+                    <span className="px-2 py-1 rounded bg-red-500/20 text-red-400 text-xs font-medium">
+                      หมดโควต้า!
+                    </span>
+                  )}
+                  {credits?.account?.isLow && !credits?.account?.isExhausted && (
+                    <span className="px-2 py-1 rounded bg-yellow-500/20 text-yellow-400 text-xs font-medium">
+                      เหลือน้อย
+                    </span>
+                  )}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={fetchCredits}
+                    disabled={loadingCredits}
+                    className="text-gray-400 hover:text-white"
+                  >
+                    <RefreshCw className={`w-4 h-4 ${loadingCredits ? "animate-spin" : ""}`} />
+                  </Button>
+                </div>
+              </div>
+              {/* Progress bar */}
+              {credits?.account && (
+                <div className="mt-3">
+                  <div className="w-full h-2 bg-slate-700 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all ${
+                        credits.account.isExhausted 
+                          ? "bg-red-500" 
+                          : credits.account.isLow 
+                            ? "bg-yellow-500" 
+                            : "bg-green-500"
+                      }`}
+                      style={{ width: `${Math.min(100, credits.account.usagePercent)}%` }}
+                    />
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">
+                    💡 ราคา: $0.75 ต่อ 1,000 ads | การค้นหา 10 ads ≈ $0.0075
+                  </p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </motion.div>
 
         {/* Search Form */}
