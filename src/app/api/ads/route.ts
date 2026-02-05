@@ -272,7 +272,7 @@ export async function POST(request: NextRequest) {
     if (searchType === "page" && pageIdentifiers.length > 0) {
       // Set action to scrape ads of facebook pages
       actorInput.action = "Scrape ads of facebook pages";
-      // Provide page URLs (convert identifiers back to full URLs if needed)
+      // Provide page URLs via 'urls' field (convert identifiers to full URLs if needed)
       const pageUrlList = pageIdentifiers.map(id => {
         if (id.includes("facebook.com")) {
           return id;
@@ -280,7 +280,8 @@ export async function POST(request: NextRequest) {
         // Convert page ID/username to URL
         return `https://www.facebook.com/${id}`;
       });
-      actorInput.pageUrls = pageUrlList;
+      // Use 'urls' field as required by the actor
+      actorInput.urls = pageUrlList;
       actorInput.maxAdsPerPage = Math.min(limit, 100);
     }
 
