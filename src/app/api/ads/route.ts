@@ -229,33 +229,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "กรุณาใส่ URL เพจ หรือ Page ID" }, { status: 400 });
     }
 
-    // Process page URLs - convert to Ad Library URLs
-    let adLibraryUrls: string[] = [];
-    let processedPageIds: string[] = pageIds || [];
+    // Process page URLs - extract page identifiers
+    let pageIdentifiers: string[] = pageIds || [];
     
     if (pageUrls && pageUrls.length > 0) {
       pageUrls.forEach((url: string) => {
         const trimmed = url.trim();
-        
         // Extract page identifier from URL
         const pageIdentifier = extractPageIdentifier(trimmed);
-        
         if (pageIdentifier) {
-          // Convert to Facebook Ad Library URL format
-          // The actor expects Ad Library URLs, not page URLs
-          const adLibraryUrl = `https://www.facebook.com/ads/library/?active_status=all&ad_type=all&country=${country}&view_all_page_id=${pageIdentifier}`;
-          adLibraryUrls.push(adLibraryUrl);
+          pageIdentifiers.push(pageIdentifier);
         }
       });
-    }
-    
-    // Also convert page IDs to Ad Library URLs
-    if (processedPageIds.length > 0) {
-      processedPageIds.forEach((pageId: string) => {
-        const adLibraryUrl = `https://www.facebook.com/ads/library/?active_status=all&ad_type=all&country=${country}&view_all_page_id=${pageId}`;
-        adLibraryUrls.push(adLibraryUrl);
-      });
-      processedPageIds = []; // Clear since we converted them
     }
 
     // Check Apify credentials
@@ -267,7 +252,7 @@ export async function POST(request: NextRequest) {
       }, { status: 500 });
     }
 
-    console.log(`[Ads Search] Type: ${searchType}, Ad Library URLs: ${adLibraryUrls.join(",")}, Country: ${country}`);
+    console.log(`[Ads Search] Type: ${searchType}, Page IDs: ${pageIdentifiers.join(",")}, Country: ${country}`);
 
     // Initialize Apify client
     const client = new ApifyClient({ token: apifyToken });
@@ -283,9 +268,14 @@ export async function POST(request: NextRequest) {
       actorInput.searchQuery = query.trim();
     }
 
-    // Search by page - use Ad Library URLs
-    if (searchType === "page" && adLibraryUrls.length > 0) {
-      actorInput.urls = adLibraryUrls;
+    // Search by page - try multiple parameter names that the actor might accept
+    if (searchType === "page" && pageIdentifiers.length > 0) {
+      // Try pageIds (array of page IDs/names)
+      actorInput.pageIds = pageIdentifiers;
+      // Also set as advertiserId for single page
+      if (pageIdentifiers.length === 1) {
+        actorInput.advertiserId = pageIdentifiers[0];
+      }
     }
 
     // Ad type filter
