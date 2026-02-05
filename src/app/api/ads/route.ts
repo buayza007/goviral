@@ -229,22 +229,33 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "กรุณาใส่ URL เพจ หรือ Page ID" }, { status: 400 });
     }
 
-    // Process page URLs - keep full URLs for the actor
-    let processedPageUrls: string[] = [];
+    // Process page URLs - convert to Ad Library URLs
+    let adLibraryUrls: string[] = [];
     let processedPageIds: string[] = pageIds || [];
     
     if (pageUrls && pageUrls.length > 0) {
-      // Keep full URLs that contain facebook.com
-      // Extract username/ID for those that don't
       pageUrls.forEach((url: string) => {
         const trimmed = url.trim();
-        if (trimmed.includes("facebook.com") || trimmed.includes("fb.com")) {
-          processedPageUrls.push(trimmed);
-        } else {
-          // It's a page name or ID directly
-          processedPageIds.push(trimmed);
+        
+        // Extract page identifier from URL
+        const pageIdentifier = extractPageIdentifier(trimmed);
+        
+        if (pageIdentifier) {
+          // Convert to Facebook Ad Library URL format
+          // The actor expects Ad Library URLs, not page URLs
+          const adLibraryUrl = `https://www.facebook.com/ads/library/?active_status=all&ad_type=all&country=${country}&view_all_page_id=${pageIdentifier}`;
+          adLibraryUrls.push(adLibraryUrl);
         }
       });
+    }
+    
+    // Also convert page IDs to Ad Library URLs
+    if (processedPageIds.length > 0) {
+      processedPageIds.forEach((pageId: string) => {
+        const adLibraryUrl = `https://www.facebook.com/ads/library/?active_status=all&ad_type=all&country=${country}&view_all_page_id=${pageId}`;
+        adLibraryUrls.push(adLibraryUrl);
+      });
+      processedPageIds = []; // Clear since we converted them
     }
 
     // Check Apify credentials
@@ -256,7 +267,7 @@ export async function POST(request: NextRequest) {
       }, { status: 500 });
     }
 
-    console.log(`[Ads Search] Type: ${searchType}, URLs: ${processedPageUrls.join(",")}, IDs: ${processedPageIds.join(",")}, Country: ${country}`);
+    console.log(`[Ads Search] Type: ${searchType}, Ad Library URLs: ${adLibraryUrls.join(",")}, Country: ${country}`);
 
     // Initialize Apify client
     const client = new ApifyClient({ token: apifyToken });
@@ -272,15 +283,9 @@ export async function POST(request: NextRequest) {
       actorInput.searchQuery = query.trim();
     }
 
-    // Search by page - try URLs first, then IDs
-    if (searchType === "page") {
-      if (processedPageUrls.length > 0) {
-        // Use 'urls' field for Facebook Ad Library scraper
-        actorInput.urls = processedPageUrls;
-      }
-      if (processedPageIds.length > 0) {
-        actorInput.pageIds = processedPageIds;
-      }
+    // Search by page - use Ad Library URLs
+    if (searchType === "page" && adLibraryUrls.length > 0) {
+      actorInput.urls = adLibraryUrls;
     }
 
     // Ad type filter
@@ -347,7 +352,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       searchType,
-      query: searchType === "keyword" ? query : [...processedPageUrls, ...processedPageIds].join(", "),
+      query: searchType === "keyword" ? query : (pageUrls?.join(", ") || ""),
       country,
       totalAds: processedAds.length,
       activeAds: processedAds.filter(a => a.isActive).length,
