@@ -13,6 +13,7 @@ import {
   Settings,
   Sparkles,
   Zap,
+  Megaphone,
 } from "lucide-react";
 
 const navigation = [
@@ -20,6 +21,7 @@ const navigation = [
   { name: "ค้นหา Viral (Keyword)", href: "/dashboard/search", icon: Search },
   { name: "ค้นหา Viral (เพจ)", href: "/dashboard/search-page", icon: FileText },
   { name: "ติดตามเพจคู่แข่ง", href: "/dashboard/monitor", icon: Eye },
+  { name: "ดูแอดคู่แข่ง", href: "/dashboard/ads", icon: Megaphone },
   { name: "ประวัติการค้นหา", href: "/dashboard/history", icon: History },
   { name: "เทรนด์", href: "/dashboard/trends", icon: TrendingUp },
 ];
