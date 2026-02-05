@@ -264,7 +264,8 @@ export async function POST(request: NextRequest) {
     if (searchType === "keyword" && query) {
       // Create Ad Library search URL
       const adLibrarySearchUrl = `https://www.facebook.com/ads/library/?active_status=all&ad_type=all&country=${country}&q=${encodeURIComponent(query.trim())}&search_type=keyword_unordered&media_type=all`;
-      actorInput.urls = [adLibrarySearchUrl];
+      // Try as object format { url: "..." }
+      actorInput.urls = [{ url: adLibrarySearchUrl }];
       actorInput.maxAds = Math.min(limit, 100);
     }
 
@@ -274,11 +275,9 @@ export async function POST(request: NextRequest) {
       actorInput.action = "Scrape ads of facebook pages";
       // Provide page URLs via 'urls' field (convert identifiers to full URLs if needed)
       const pageUrlList = pageIdentifiers.map(id => {
-        if (id.includes("facebook.com")) {
-          return id;
-        }
-        // Convert page ID/username to URL
-        return `https://www.facebook.com/${id}`;
+        const pageUrl = id.includes("facebook.com") ? id : `https://www.facebook.com/${id}`;
+        // Return as object format
+        return { url: pageUrl };
       });
       // Use 'urls' field as required by the actor
       actorInput.urls = pageUrlList;
