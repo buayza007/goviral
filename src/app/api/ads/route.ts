@@ -287,7 +287,9 @@ export async function POST(request: NextRequest) {
       const adLibrarySearchUrl = `https://www.facebook.com/ads/library/?active_status=all&ad_type=all&country=${country}&q=${encodeURIComponent(query.trim())}&search_type=keyword_unordered&media_type=all`;
       // Try as object format { url: "..." }
       actorInput.urls = [{ url: adLibrarySearchUrl }];
-      actorInput.maxAds = Math.min(limit, 100);
+      // Use correct parameter names for limiting results
+      actorInput.limitPerSource = Math.min(limit, 100);
+      actorInput.count = Math.min(limit, 100);
     }
 
     // Search by page - use "Scrape ads of facebook pages" action
@@ -302,7 +304,9 @@ export async function POST(request: NextRequest) {
       });
       // Use 'urls' field as required by the actor
       actorInput.urls = pageUrlList;
-      actorInput.maxAdsPerPage = Math.min(limit, 100);
+      // Use correct parameter names for limiting results
+      actorInput.limitPerSource = Math.min(limit, 100);
+      actorInput.count = Math.min(limit, 100);
     }
 
     // Ad type filter (only for keyword search with Ad Library URL)
