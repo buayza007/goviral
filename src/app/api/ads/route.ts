@@ -140,60 +140,81 @@ function extractPageIdentifier(url: string): string {
 }
 
 // ============================================
-// Helper: Process Ads Data
+// Helper: Process Ads Data (Updated for actual Apify response)
 // ============================================
 function processAdsData(rawAds: Record<string, unknown>[]): ProcessedAd[] {
   return rawAds.map((raw, index) => {
-    const ad = raw as unknown as FacebookAd;
-    const snapshot = ad.snapshot || {};
+    // Type the raw data based on actual Apify response
+    const ad = raw as Record<string, unknown>;
+    const snapshot = (ad.snapshot || {}) as Record<string, unknown>;
+    const body = (snapshot.body || {}) as Record<string, unknown>;
+    const images = (snapshot.images || []) as Array<Record<string, unknown>>;
+    const videos = (snapshot.videos || []) as Array<Record<string, unknown>>;
+    const cards = (snapshot.cards || []) as Array<Record<string, unknown>>;
     
-    // Get first image
+    // Get first image from images array or cards
     let imageUrl: string | undefined;
-    if (snapshot.images && snapshot.images.length > 0) {
-      imageUrl = snapshot.images[0].url;
+    if (images.length > 0) {
+      imageUrl = (images[0].resized_image_url || images[0].original_image_url) as string;
+    } else if (cards.length > 0 && cards[0].video_preview_image_url) {
+      imageUrl = cards[0].video_preview_image_url as string;
     }
     
-    // Get video info
+    // Get video info from videos array or cards
     let videoUrl: string | undefined;
     let videoThumbnail: string | undefined;
-    if (snapshot.videos && snapshot.videos.length > 0) {
-      videoThumbnail = snapshot.videos[0].video_preview_image_url;
-      videoUrl = snapshot.videos[0].video_url;
+    if (videos.length > 0) {
+      videoThumbnail = videos[0].video_preview_image_url as string;
+      videoUrl = (videos[0].video_hd_url || videos[0].video_sd_url) as string;
+    } else if (cards.length > 0) {
+      // Check cards for video
+      const cardWithVideo = cards.find(c => c.video_hd_url || c.video_sd_url);
+      if (cardWithVideo) {
+        videoThumbnail = cardWithVideo.video_preview_image_url as string;
+        videoUrl = (cardWithVideo.video_hd_url || cardWithVideo.video_sd_url) as string;
+      }
+    }
+
+    // Get body text
+    let bodyText = body.text as string | undefined;
+    // If body text is a template placeholder, try to get from cards
+    if (bodyText?.includes('{{') && cards.length > 0) {
+      bodyText = (cards[0].body || cards[0].link_description) as string;
     }
 
     return {
-      id: ad.adArchiveID || `ad-${index}`,
-      adArchiveId: ad.adArchiveID || "",
-      pageId: ad.pageID || "",
-      pageName: ad.pageName || "Unknown Page",
-      pageAvatar: ad.pageProfilePictureURL,
-      isActive: ad.isActive ?? true,
-      startDate: ad.startDate || "",
-      endDate: ad.endDate,
+      id: (ad.ad_archive_id || `ad-${index}`) as string,
+      adArchiveId: (ad.ad_archive_id || "") as string,
+      pageId: (ad.page_id || "") as string,
+      pageName: (ad.page_name || snapshot.page_name || "Unknown Page") as string,
+      pageAvatar: snapshot.page_profile_picture_url as string | undefined,
+      isActive: (ad.is_active ?? true) as boolean,
+      startDate: (ad.start_date_formatted || "") as string,
+      endDate: ad.end_date_formatted as string | undefined,
       // Creative
-      bodyText: snapshot.body_text || ((raw as Record<string, unknown>).body as Record<string, unknown>)?.text as string | undefined,
-      caption: snapshot.caption,
-      ctaText: snapshot.cta_text,
-      ctaType: snapshot.cta_type,
-      imageUrl: imageUrl || (raw as Record<string, unknown>).imageUrl as string,
+      bodyText: bodyText,
+      caption: snapshot.caption as string | undefined,
+      ctaText: (snapshot.cta_text || (cards[0]?.cta_text)) as string | undefined,
+      ctaType: (snapshot.cta_type || (cards[0]?.cta_type)) as string | undefined,
+      imageUrl: imageUrl,
       videoUrl: videoUrl,
       videoThumbnail: videoThumbnail || imageUrl,
-      linkUrl: snapshot.link_url,
-      linkTitle: snapshot.link_title,
-      linkDescription: snapshot.link_description,
-      // Metrics
-      spendMin: ad.spend?.lower_bound,
-      spendMax: ad.spend?.upper_bound,
-      impressionsMin: ad.impressions?.lower_bound,
-      impressionsMax: ad.impressions?.upper_bound,
-      reachMin: ad.reach?.lower_bound,
-      reachMax: ad.reach?.upper_bound,
-      currency: ad.currency || "THB",
+      linkUrl: snapshot.link_url as string | undefined,
+      linkTitle: snapshot.title as string | undefined,
+      linkDescription: snapshot.link_description as string | undefined,
+      // Metrics - these may be null for non-political ads
+      spendMin: undefined,
+      spendMax: undefined,
+      impressionsMin: undefined,
+      impressionsMax: undefined,
+      reachMin: undefined,
+      reachMax: undefined,
+      currency: (ad.currency || "") as string,
       // Distribution
-      platforms: ad.publisherPlatform || [],
-      categories: ad.categories || [],
-      demographics: ad.demographicDistribution || [],
-      regions: ad.regionDistribution || [],
+      platforms: (ad.publisher_platform || []) as string[],
+      categories: (snapshot.page_categories || ad.categories || []) as string[],
+      demographics: [],
+      regions: [],
     };
   });
 }
