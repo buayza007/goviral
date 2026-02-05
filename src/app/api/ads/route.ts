@@ -229,11 +229,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "กรุณาใส่ URL เพจ หรือ Page ID" }, { status: 400 });
     }
 
-    // Process page URLs to extract IDs/usernames
+    // Process page URLs - keep full URLs for the actor
+    let processedPageUrls: string[] = [];
     let processedPageIds: string[] = pageIds || [];
+    
     if (pageUrls && pageUrls.length > 0) {
-      const extractedIds = pageUrls.map((url: string) => extractPageIdentifier(url));
-      processedPageIds = [...processedPageIds, ...extractedIds].filter(Boolean);
+      // Keep full URLs that contain facebook.com
+      // Extract username/ID for those that don't
+      pageUrls.forEach((url: string) => {
+        const trimmed = url.trim();
+        if (trimmed.includes("facebook.com") || trimmed.includes("fb.com")) {
+          processedPageUrls.push(trimmed);
+        } else {
+          // It's a page name or ID directly
+          processedPageIds.push(trimmed);
+        }
+      });
     }
 
     // Check Apify credentials
@@ -245,7 +256,7 @@ export async function POST(request: NextRequest) {
       }, { status: 500 });
     }
 
-    console.log(`[Ads Search] Type: ${searchType}, Query: ${query || processedPageIds?.join(",")}, Country: ${country}`);
+    console.log(`[Ads Search] Type: ${searchType}, URLs: ${processedPageUrls.join(",")}, IDs: ${processedPageIds.join(",")}, Country: ${country}`);
 
     // Initialize Apify client
     const client = new ApifyClient({ token: apifyToken });
@@ -261,9 +272,15 @@ export async function POST(request: NextRequest) {
       actorInput.searchQuery = query.trim();
     }
 
-    // Search by page IDs/usernames
-    if (searchType === "page" && processedPageIds && processedPageIds.length > 0) {
-      actorInput.pageIds = processedPageIds;
+    // Search by page - try URLs first, then IDs
+    if (searchType === "page") {
+      if (processedPageUrls.length > 0) {
+        // Use startUrls for full URLs
+        actorInput.startUrls = processedPageUrls.map(url => ({ url }));
+      }
+      if (processedPageIds.length > 0) {
+        actorInput.pageIds = processedPageIds;
+      }
     }
 
     // Ad type filter
@@ -278,23 +295,45 @@ export async function POST(request: NextRequest) {
 
     console.log("[Ads Search] Apify Input:", JSON.stringify(actorInput, null, 2));
 
+    // Debug mode - return input without running
+    if (debug) {
+      try {
+        // Run Apify actor
+        const run = await client.actor("curious_coder/facebook-ads-library-scraper").call(actorInput);
+        const { items } = await client.dataset(run.defaultDatasetId).listItems();
+        
+        return NextResponse.json({
+          debug: true,
+          rawCount: items.length,
+          input: actorInput,
+          rawData: items.slice(0, 5),
+        });
+      } catch (debugError) {
+        return NextResponse.json({
+          debug: true,
+          error: debugError instanceof Error ? debugError.message : "Unknown error",
+          input: actorInput,
+        });
+      }
+    }
+
     // Run Apify actor
-    const run = await client.actor("curious_coder/facebook-ads-library-scraper").call(actorInput);
+    let run;
+    try {
+      run = await client.actor("curious_coder/facebook-ads-library-scraper").call(actorInput);
+    } catch (actorError) {
+      console.error("[Ads Search] Actor error:", actorError);
+      return NextResponse.json({
+        error: "Apify actor failed",
+        message: actorError instanceof Error ? actorError.message : "Failed to run actor",
+        input: actorInput,
+      }, { status: 500 });
+    }
 
     // Get results from dataset
     const { items } = await client.dataset(run.defaultDatasetId).listItems();
 
     console.log(`[Ads Search] Got ${items.length} raw ads`);
-
-    // Debug mode - return raw data
-    if (debug) {
-      return NextResponse.json({
-        debug: true,
-        rawCount: items.length,
-        input: actorInput,
-        rawData: items.slice(0, 5), // First 5 items for debugging
-      });
-    }
 
     // Process ads data
     const processedAds = processAdsData(items as Record<string, unknown>[]);
@@ -308,7 +347,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       searchType,
-      query: searchType === "keyword" ? query : processedPageIds?.join(", "),
+      query: searchType === "keyword" ? query : [...processedPageUrls, ...processedPageIds].join(", "),
       country,
       totalAds: processedAds.length,
       activeAds: processedAds.filter(a => a.isActive).length,
