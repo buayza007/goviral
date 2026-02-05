@@ -291,7 +291,7 @@ function AdCard({ ad }: { ad: ProcessedAd }) {
 export default function AdsPage() {
   const [searchType, setSearchType] = useState<"keyword" | "page">("keyword");
   const [query, setQuery] = useState("");
-  const [pageIds, setPageIds] = useState("");
+  const [pageUrls, setPageUrls] = useState("");
   const [country, setCountry] = useState("TH");
   const [activeStatus, setActiveStatus] = useState("all");
   const [limit, setLimit] = useState(20);
@@ -308,9 +308,9 @@ export default function AdsPage() {
       });
       return;
     }
-    if (searchType === "page" && !pageIds.trim()) {
+    if (searchType === "page" && !pageUrls.trim()) {
       toast({
-        title: "กรุณาใส่ Page ID",
+        title: "กรุณาใส่ URL เพจ",
         variant: "destructive",
       });
       return;
@@ -327,7 +327,7 @@ export default function AdsPage() {
         body: JSON.stringify({
           searchType,
           query: searchType === "keyword" ? query.trim() : undefined,
-          pageIds: searchType === "page" ? pageIds.split(",").map((id) => id.trim()).filter(Boolean) : undefined,
+          pageUrls: searchType === "page" ? pageUrls.split(/[\n,]/).map((url) => url.trim()).filter(Boolean) : undefined,
           country,
           activeStatus,
           limit,
@@ -425,7 +425,7 @@ export default function AdsPage() {
                   className="flex-1"
                 >
                   <Users className="w-4 h-4 mr-2" />
-                  ค้นหาด้วย Page ID
+                  ค้นหาด้วย URL เพจ
                 </Button>
               </div>
 
@@ -441,9 +441,9 @@ export default function AdsPage() {
                   />
                 ) : (
                   <Input
-                    placeholder="ใส่ Page ID (คั่นด้วย comma เช่น 123456789,987654321)"
-                    value={pageIds}
-                    onChange={(e) => setPageIds(e.target.value)}
+                    placeholder="วาง URL เพจ เช่น https://facebook.com/pagename"
+                    value={pageUrls}
+                    onChange={(e) => setPageUrls(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && handleSearch()}
                     className="flex-1 bg-slate-900/50 border-slate-600"
                   />

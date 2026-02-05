@@ -91,6 +91,55 @@ interface ProcessedAd {
 }
 
 // ============================================
+// Helper: Extract Page ID/Username from URL
+// ============================================
+function extractPageIdentifier(url: string): string {
+  // Clean the URL
+  const cleanUrl = url.trim();
+  
+  // If it's already just an ID or username (no URL), return as is
+  if (!cleanUrl.includes("facebook.com") && !cleanUrl.includes("fb.com")) {
+    return cleanUrl;
+  }
+  
+  try {
+    // Remove query params and trailing slashes
+    let path = cleanUrl.split("?")[0].replace(/\/+$/, "");
+    
+    // Extract from various URL formats:
+    // https://www.facebook.com/pagename
+    // https://www.facebook.com/profile.php?id=123456789
+    // https://fb.com/pagename
+    // https://www.facebook.com/pages/PageName/123456789
+    
+    // Check for profile.php?id=
+    const idMatch = cleanUrl.match(/[?&]id=(\d+)/);
+    if (idMatch) {
+      return idMatch[1];
+    }
+    
+    // Check for /pages/Name/ID format
+    const pagesMatch = path.match(/\/pages\/[^\/]+\/(\d+)/);
+    if (pagesMatch) {
+      return pagesMatch[1];
+    }
+    
+    // Extract last part of path (page username)
+    const parts = path.split("/").filter(Boolean);
+    const lastPart = parts[parts.length - 1];
+    
+    // Skip common non-page paths
+    if (lastPart && !["www.facebook.com", "facebook.com", "fb.com", "pages"].includes(lastPart)) {
+      return lastPart;
+    }
+    
+    return cleanUrl;
+  } catch {
+    return cleanUrl;
+  }
+}
+
+// ============================================
 // Helper: Process Ads Data
 // ============================================
 function processAdsData(rawAds: Record<string, unknown>[]): ProcessedAd[] {
@@ -164,6 +213,7 @@ export async function POST(request: NextRequest) {
       searchType = "keyword", // "keyword" or "page"
       query,
       pageIds,
+      pageUrls, // NEW: Accept page URLs
       country = "TH",
       adType = "all", // "all", "political_and_issue_ads", "image", "video"
       activeStatus = "all", // "all", "active", "inactive"
@@ -175,8 +225,15 @@ export async function POST(request: NextRequest) {
     if (searchType === "keyword" && !query?.trim()) {
       return NextResponse.json({ error: "กรุณาใส่คำค้นหา" }, { status: 400 });
     }
-    if (searchType === "page" && (!pageIds || pageIds.length === 0)) {
-      return NextResponse.json({ error: "กรุณาใส่ Page ID" }, { status: 400 });
+    if (searchType === "page" && (!pageIds || pageIds.length === 0) && (!pageUrls || pageUrls.length === 0)) {
+      return NextResponse.json({ error: "กรุณาใส่ URL เพจ หรือ Page ID" }, { status: 400 });
+    }
+
+    // Process page URLs to extract IDs/usernames
+    let processedPageIds: string[] = pageIds || [];
+    if (pageUrls && pageUrls.length > 0) {
+      const extractedIds = pageUrls.map((url: string) => extractPageIdentifier(url));
+      processedPageIds = [...processedPageIds, ...extractedIds].filter(Boolean);
     }
 
     // Check Apify credentials
@@ -188,7 +245,7 @@ export async function POST(request: NextRequest) {
       }, { status: 500 });
     }
 
-    console.log(`[Ads Search] Type: ${searchType}, Query: ${query || pageIds?.join(",")}, Country: ${country}`);
+    console.log(`[Ads Search] Type: ${searchType}, Query: ${query || processedPageIds?.join(",")}, Country: ${country}`);
 
     // Initialize Apify client
     const client = new ApifyClient({ token: apifyToken });
@@ -204,9 +261,9 @@ export async function POST(request: NextRequest) {
       actorInput.searchQuery = query.trim();
     }
 
-    // Search by page IDs
-    if (searchType === "page" && pageIds && pageIds.length > 0) {
-      actorInput.pageIds = pageIds;
+    // Search by page IDs/usernames
+    if (searchType === "page" && processedPageIds && processedPageIds.length > 0) {
+      actorInput.pageIds = processedPageIds;
     }
 
     // Ad type filter
@@ -251,7 +308,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       searchType,
-      query: searchType === "keyword" ? query : pageIds?.join(", "),
+      query: searchType === "keyword" ? query : processedPageIds?.join(", "),
       country,
       totalAds: processedAds.length,
       activeAds: processedAds.filter(a => a.isActive).length,
