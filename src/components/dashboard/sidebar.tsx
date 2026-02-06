@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 
 const navigation = [
+  { name: "🔥 Ads Trend", href: "/dashboard/ads-trend", icon: TrendingUp },
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { name: "ค้นหา Viral (Keyword)", href: "/dashboard/search", icon: Search },
   { name: "ค้นหา Viral (เพจ)", href: "/dashboard/search-page", icon: FileText },

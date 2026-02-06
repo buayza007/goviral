@@ -21,6 +21,7 @@ model User {
   searchQuota      Int            @default(10) // Monthly search quota
   searchesUsed     Int            @default(0)  // Searches used this month
   quotaResetDate   DateTime       @default(now())
+  businessType     String?        // User's business category for Ads Trend feature
   createdAt        DateTime       @default(now())
   updatedAt        DateTime       @updatedAt
 
