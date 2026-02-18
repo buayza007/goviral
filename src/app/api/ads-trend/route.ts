@@ -171,6 +171,8 @@ function processAdsData(rawAds: Record<string, unknown>[]) {
             imageUrl: imageUrl,
             videoUrl: videoUrl,
             videoThumbnail: videoThumbnail || imageUrl,
+            // Link to the actual post/landing page the ad points to
+            linkUrl: (snapshot.link_url || (cards[0]?.link_url) || null) as string | null,
             postedAt,
         };
     });
@@ -301,6 +303,7 @@ export async function POST(request: NextRequest) {
                         imageUrl: ad.imageUrl || null,
                         videoUrl: ad.videoUrl || null,
                         videoThumbnail: ad.videoThumbnail || null,
+                        linkUrl: ad.linkUrl || null,
                         postedAt: ad.postedAt?.toISOString() || null,
                         timeAgo: formatTimeAgo(ad.postedAt),
                         // FB Ads Library doesn't expose public engagement metrics
