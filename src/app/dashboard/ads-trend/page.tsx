@@ -178,19 +178,39 @@ function TrendingAdCard({ ad }: { ad: TrendingAd }) {
 
                     {/* Hover overlay with View button */}
                     <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end justify-center pb-4">
-                        <Button
-                            size="sm"
-                            className="gap-2 bg-white/90 text-black hover:bg-white"
-                            onClick={() =>
-                                window.open(
-                                    `https://www.facebook.com/ads/library/?id=${ad.adArchiveId}`,
-                                    "_blank"
-                                )
-                            }
-                        >
-                            <ExternalLink className="h-4 w-4" />
-                            ดูใน Ad Library
-                        </Button>
+                        <div className="flex gap-2">
+                            {ad.adArchiveId && (
+                                <Button
+                                    size="sm"
+                                    className="gap-1.5 bg-white/90 text-black hover:bg-white text-xs"
+                                    onClick={() =>
+                                        window.open(
+                                            `https://www.facebook.com/ads/library/?id=${ad.adArchiveId}`,
+                                            "_blank"
+                                        )
+                                    }
+                                >
+                                    <ExternalLink className="h-3.5 w-3.5" />
+                                    ดูโฆษณา
+                                </Button>
+                            )}
+                            {ad.pageId && (
+                                <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="gap-1.5 bg-black/60 border-white/30 text-white hover:bg-black/80 text-xs"
+                                    onClick={() =>
+                                        window.open(
+                                            `https://www.facebook.com/ads/library/?active_status=active&ad_type=all&country=TH&view_all_page_id=${ad.pageId}&search_type=page`,
+                                            "_blank"
+                                        )
+                                    }
+                                >
+                                    <ExternalLink className="h-3.5 w-3.5" />
+                                    ดูแอดทั้งหมด
+                                </Button>
+                            )}
+                        </div>
                     </div>
                 </div>
 
