@@ -5,9 +5,6 @@ import { motion, AnimatePresence } from "framer-motion";
 import Image from "next/image";
 import {
     TrendingUp,
-    Heart,
-    MessageCircle,
-    Share2,
     ExternalLink,
     Loader2,
     Flame,
@@ -19,11 +16,12 @@ import {
     ChevronDown,
     Play,
     ArrowRight,
+    CheckCircle2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "@/components/ui/use-toast";
-import { formatNumber, truncateText } from "@/lib/utils";
+import { truncateText } from "@/lib/utils";
 
 interface TrendingAd {
     id: string;
@@ -232,31 +230,24 @@ function TrendingAdCard({ ad }: { ad: TrendingAd }) {
                         </p>
                     </div>
 
-                    {/* Footer: Engagement Stats */}
-                    <div className="grid grid-cols-3 gap-2 pt-4 border-t border-slate-700/50">
-                        <div className="flex flex-col items-center rounded-xl bg-pink-500/10 py-3 px-2 transition-transform hover:scale-105">
-                            <Heart className="h-4 w-4 text-pink-500 mb-1" />
-                            <span className="text-sm font-bold text-white">
-                                {formatNumber(ad.likesCount)}
+                    {/* Footer: Status + Recency */}
+                    <div className="grid grid-cols-2 gap-2 pt-4 border-t border-slate-700/50">
+                        <div className={`flex flex-col items-center rounded-xl py-3 px-2 transition-transform hover:scale-105 ${ad.isActive ? "bg-green-500/10" : "bg-slate-700/30"
+                            }`}>
+                            <CheckCircle2 className={`h-4 w-4 mb-1 ${ad.isActive ? "text-green-400" : "text-slate-500"
+                                }`} />
+                            <span className={`text-sm font-bold ${ad.isActive ? "text-green-400" : "text-slate-400"
+                                }`}>
+                                {ad.isActive ? "Active" : "Inactive"}
                             </span>
-                            <span className="text-[10px] text-slate-400">Likes</span>
-                            <span className="text-[9px] text-pink-500 font-medium">×1</span>
+                            <span className="text-[10px] text-slate-400">สถานะ</span>
                         </div>
                         <div className="flex flex-col items-center rounded-xl bg-blue-500/10 py-3 px-2 transition-transform hover:scale-105">
-                            <MessageCircle className="h-4 w-4 text-blue-500 mb-1" />
-                            <span className="text-sm font-bold text-white">
-                                {formatNumber(ad.commentsCount)}
+                            <Clock className="h-4 w-4 text-blue-400 mb-1" />
+                            <span className="text-xs font-semibold text-white text-center leading-tight">
+                                {ad.timeAgo}
                             </span>
-                            <span className="text-[10px] text-slate-400">Comments</span>
-                            <span className="text-[9px] text-blue-500 font-medium">×3</span>
-                        </div>
-                        <div className="flex flex-col items-center rounded-xl bg-green-500/10 py-3 px-2 transition-transform hover:scale-105">
-                            <Share2 className="h-4 w-4 text-green-500 mb-1" />
-                            <span className="text-sm font-bold text-white">
-                                {formatNumber(ad.sharesCount)}
-                            </span>
-                            <span className="text-[10px] text-slate-400">Shares</span>
-                            <span className="text-[9px] text-green-500 font-medium">×5</span>
+                            <span className="text-[10px] text-slate-400">เวลาที่โพสต์</span>
                         </div>
                     </div>
 
@@ -347,8 +338,8 @@ function BusinessTypeSelector({
                                 whileTap={{ scale: 0.98 }}
                                 onClick={() => setSelected(type)}
                                 className={`p-4 rounded-xl border-2 transition-all duration-200 text-left ${selected === type
-                                        ? "border-viral-500 bg-viral-500/10 shadow-lg shadow-viral-500/20"
-                                        : "border-slate-700 bg-slate-800/50 hover:border-slate-600 hover:bg-slate-800"
+                                    ? "border-viral-500 bg-viral-500/10 shadow-lg shadow-viral-500/20"
+                                    : "border-slate-700 bg-slate-800/50 hover:border-slate-600 hover:bg-slate-800"
                                     }`}
                             >
                                 <span className="text-2xl mb-2 block">
@@ -579,10 +570,10 @@ export default function AdsTrendPage() {
                             <div>
                                 <span className="text-slate-400">สูตรคำนวณ Trend Score: </span>
                                 <code className="px-2 py-1 rounded bg-slate-800 text-viral-400 text-xs font-mono">
-                                    (Likes×1 + Comments×3 + Shares×5) ÷ (Hours)^1.5
+                                    ActivityScore ÷ (Hours)^0.5
                                 </code>
                                 <span className="text-slate-500 text-xs ml-2">
-                                    ยิ่งใหม่และมี Engagement สูง = คะแนนยิ่งสูง
+                                    Active ads + ยิ่งใหม่ = คะแนนยิ่งสูง
                                 </span>
                             </div>
                         </div>
