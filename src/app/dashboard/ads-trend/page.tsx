@@ -16,6 +16,7 @@ import {
     ChevronDown,
     Play,
     ArrowRight,
+    ArrowLeft,
     CheckCircle2,
     Search,
 } from "lucide-react";
@@ -317,10 +318,12 @@ function TrendingAdCard({ ad }: { ad: TrendingAd }) {
 function BusinessTypeSelector({
     availableTypes,
     onSelect,
+    onCancel,
     loading,
 }: {
     availableTypes: string[];
     onSelect: (type: string) => void;
+    onCancel?: () => void;
     loading: boolean;
 }) {
     const [selected, setSelected] = useState<string | null>(null);
@@ -342,16 +345,30 @@ function BusinessTypeSelector({
     return (
         <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="max-w-3xl mx-auto">
             <Card className="bg-gradient-to-br from-slate-800/90 to-slate-900/90 border-slate-700/50 overflow-hidden">
-                <CardHeader className="text-center border-b border-slate-700/50 pb-6">
+                <CardHeader className="border-b border-slate-700/50 pb-6">
+                    {/* ปุ่มย้อนกลับ — แสดงเฉพาะเมื่อมีข้อมูลเดิมอยู่แล้ว */}
+                    {onCancel && (
+                        <div className="mb-4">
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={onCancel}
+                                className="text-slate-400 hover:text-white hover:bg-slate-700 gap-2"
+                            >
+                                <ArrowLeft className="h-4 w-4" />
+                                ย้อนกลับ
+                            </Button>
+                        </div>
+                    )}
                     <div className="flex justify-center mb-4">
                         <div className="p-4 rounded-2xl bg-gradient-to-br from-viral-500 to-orange-500 shadow-lg shadow-viral-500/30">
                             <Building2 className="w-10 h-10 text-white" />
                         </div>
                     </div>
-                    <CardTitle className="text-2xl font-bold bg-gradient-to-r from-viral-400 to-orange-400 bg-clip-text text-transparent">
-                        ยินดีต้อนรับสู่ Ads Trend 🔥
+                    <CardTitle className="text-2xl font-bold text-center bg-gradient-to-r from-viral-400 to-orange-400 bg-clip-text text-transparent">
+                        เปลี่ยนหมวดธุรกิจ 🔥
                     </CardTitle>
-                    <p className="text-slate-400 mt-2">กรุณาเลือกประเภทธุรกิจของคุณเพื่อดูโฆษณาที่กำลัง Trending</p>
+                    <p className="text-slate-400 mt-2 text-center">เลือกประเภทธุรกิจที่ต้องการดูโฆษณา Trending</p>
                 </CardHeader>
                 <CardContent className="p-6">
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
@@ -362,8 +379,8 @@ function BusinessTypeSelector({
                                 whileTap={{ scale: 0.98 }}
                                 onClick={() => setSelected(type)}
                                 className={`p-4 rounded-xl border-2 transition-all duration-200 text-left ${selected === type
-                                        ? "border-viral-500 bg-viral-500/10 shadow-lg shadow-viral-500/20"
-                                        : "border-slate-700 bg-slate-800/50 hover:border-slate-600 hover:bg-slate-800"
+                                    ? "border-viral-500 bg-viral-500/10 shadow-lg shadow-viral-500/20"
+                                    : "border-slate-700 bg-slate-800/50 hover:border-slate-600 hover:bg-slate-800"
                                     }`}
                             >
                                 <span className="text-2xl mb-2 block">{businessIcons[type] || "📦"}</span>
@@ -526,7 +543,12 @@ export default function AdsTrendPage() {
     if (showSelector || !businessType) {
         return (
             <div className="py-8">
-                <BusinessTypeSelector availableTypes={availableTypes} onSelect={handleSelectBusinessType} loading={loading} />
+                <BusinessTypeSelector
+                    availableTypes={availableTypes}
+                    onSelect={handleSelectBusinessType}
+                    onCancel={result ? () => setShowSelector(false) : undefined}
+                    loading={loading}
+                />
             </div>
         );
     }
